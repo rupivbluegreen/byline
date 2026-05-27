@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-05-27
+
+### Added
+
+- Commit history forensics module (`byline/history.py`): timeline
+  burst detection, commit-message style profiling, author identity drift
+  detection, file-evolution paste detection.
+- Documentation-implementation alignment module (`byline/alignment.py`)
+  with a deterministic mode (CLI flags, env vars, commands, dependencies)
+  and an optional LLM-powered semantic mode under `[llm]` extra.
+- Within-repo self-baseline (`byline/self_baseline.py`) comparing
+  commit messages, README, and code comments.
+- First-person voice and AI-disclosure detection (`byline/voice.py`).
+  Disclosure is rendered as a positive trust signal and shifts the
+  overall signal toward `aligned`.
+- Boilerplate meta-file density check (`byline/boilerplate.py`).
+- New CLI subcommands:
+  - `byline questions` — interview question generator (LLM required).
+  - `byline chat` — interactive REPL session over the audit (LLM required).
+  - `byline align` — standalone alignment check (LLM optional).
+- New `--no-history` flag on `audit` to skip commit forensics.
+- `gitpython>=3.1` and `prompt_toolkit>=3.0` runtime dependencies.
+- CI `test-base-install` job verifying the tool works without the
+  `[llm]` extra installed.
+
+### Changed
+
+- `overall_signal()` heuristic extended to incorporate history,
+  alignment, voice, boilerplate, and self-baseline findings.
+- `AuditResult` model gains optional `history`, `alignment`, `voice`,
+  `boilerplate`, and `self_baseline` fields.
+- All `anthropic` imports are deferred to inside the functions that
+  need them, so the base install never pays the import cost.
+- LLM outputs are post-processed to strip any banned phrases
+  ("AI detector", "detect AI", "the candidate used AI") before
+  reaching the user.
+
 ## [0.1.0] - 2026-05-27
 
 ### Added
@@ -39,4 +76,5 @@ This release establishes the project's framing rule: `byline` produces
 **signals of divergence from a baseline**, never authorship verdicts. All
 output language and documentation reflects this.
 
+[0.2.0]: https://github.com/rupivbluegreen/byline/releases/tag/v0.2.0
 [0.1.0]: https://github.com/rupivbluegreen/byline/releases/tag/v0.1.0

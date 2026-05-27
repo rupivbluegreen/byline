@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "byline"
-version = "0.1.0"
+version = "0.2.0"
 description = "Comparative attribution analysis tool for take-home hiring submissions on GitHub."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -34,6 +34,8 @@ dependencies = [
     "language-tool-python>=2.8",
     "rich>=13",
     "pydantic>=2.7",
+    "gitpython>=3.1",
+    "prompt_toolkit>=3.0",
 ]
 
 [project.optional-dependencies]
