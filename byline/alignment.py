@@ -20,11 +20,14 @@ prioritise reviewer attention, nothing more.
 
 from __future__ import annotations
 
+import logging
 import re
 from pathlib import Path
 from typing import Any
 
 from byline.models import AlignmentCheck, AlignmentFindings
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -600,17 +603,183 @@ def run_deterministic_alignment(repo_path: Path) -> list[AlignmentCheck]:
     return checks
 
 
+# ---------------------------------------------------------------------------
+# Semantic alignment (LLM-driven)
+# ---------------------------------------------------------------------------
+
+
+# Source-code extensions we are willing to sample for the LLM. Kept small so
+# the model sees representative project code, not generated/build artefacts.
+_CODE_SAMPLE_EXTS: frozenset[str] = frozenset(
+    {".py", ".js", ".ts", ".tsx", ".jsx", ".go", ".rs", ".rb", ".java"}
+)
+
+# Common entry-point filenames, in priority order.
+_ENTRY_POINT_NAMES: tuple[str, ...] = ("app.py", "main.py", "cli.py", "server.py", "index.js")
+
+# Per-file line cap when assembling the code-excerpt payload for the LLM.
+_MAX_LINES_PER_FILE = 200
+
+# Maximum number of files to include in the sample.
+_MAX_SAMPLED_FILES = 5
+
+
+def _read_readme(repo_path: Path) -> str:
+    """Read ``README.md`` from ``repo_path`` (case-insensitive); empty if absent."""
+
+    readme = repo_path / "README.md"
+    if not readme.is_file() and repo_path.is_dir():
+        for entry in repo_path.iterdir():
+            if entry.is_file() and entry.name.lower() == "readme.md":
+                readme = entry
+                break
+    if not readme.is_file():
+        return ""
+    return _read_text(readme)
+
+
+def _truncate_text(text: str, max_lines: int) -> str:
+    """Cap ``text`` at ``max_lines`` lines, appending an ellipsis marker if cut."""
+
+    lines = text.splitlines()
+    if len(lines) <= max_lines:
+        return text
+    truncated = lines[:max_lines]
+    truncated.append(f"... [truncated; {len(lines) - max_lines} more lines]")
+    return "\n".join(truncated)
+
+
+def _sample_code_files(repo_path: Path, readme_text: str) -> dict[str, str]:
+    """Pick up to ``_MAX_SAMPLED_FILES`` source files for LLM context.
+
+    Priority order:
+
+    1. Known entry points (``app.py``, ``main.py``, ``cli.py``, ...).
+    2. Files referenced by name in the README.
+    3. Largest remaining source files in the repo.
+
+    Each file's contents are capped at ``_MAX_LINES_PER_FILE`` lines.
+    """
+
+    if not repo_path.is_dir():
+        return {}
+
+    code_files = _iter_repo_files(repo_path, _CODE_SAMPLE_EXTS)
+    if not code_files:
+        return {}
+
+    # Index by relative path (string) and by name for quick lookups.
+    by_relpath: dict[str, Path] = {}
+    by_name: dict[str, list[Path]] = {}
+    for f in code_files:
+        rel = f.relative_to(repo_path).as_posix()
+        by_relpath[rel] = f
+        by_name.setdefault(f.name, []).append(f)
+
+    picked: list[Path] = []
+
+    # 1. Entry points by canonical name.
+    for entry_name in _ENTRY_POINT_NAMES:
+        for candidate in by_name.get(entry_name, []):
+            if candidate not in picked:
+                picked.append(candidate)
+                break
+        if len(picked) >= _MAX_SAMPLED_FILES:
+            break
+
+    # 2. Files referenced by name in the README.
+    if readme_text and len(picked) < _MAX_SAMPLED_FILES:
+        for name, candidates in by_name.items():
+            if name in readme_text:
+                for candidate in candidates:
+                    if candidate not in picked:
+                        picked.append(candidate)
+                        break
+                if len(picked) >= _MAX_SAMPLED_FILES:
+                    break
+
+    # 3. Largest remaining files by byte size.
+    if len(picked) < _MAX_SAMPLED_FILES:
+        remaining = [f for f in code_files if f not in picked]
+        remaining.sort(
+            key=lambda f: (f.stat().st_size if f.exists() else 0),
+            reverse=True,
+        )
+        for candidate in remaining:
+            picked.append(candidate)
+            if len(picked) >= _MAX_SAMPLED_FILES:
+                break
+
+    sampled: dict[str, str] = {}
+    for f in picked[:_MAX_SAMPLED_FILES]:
+        rel = f.relative_to(repo_path).as_posix()
+        text = _read_text(f)
+        if not text:
+            continue
+        sampled[rel] = _truncate_text(text, _MAX_LINES_PER_FILE)
+    return sampled
+
+
 def run_semantic_alignment(
     repo_path: Path,
     anthropic_client: Any,
 ) -> tuple[list[AlignmentCheck], str]:
-    """Placeholder for the semantic alignment pass (spec §5.3).
+    """Run the semantic alignment pass (spec §5.3) via Claude.
 
-    Implemented in a later task. Returns an empty result so callers can
-    compose the deterministic and semantic halves without conditional logic.
+    Reads the README, picks a small representative code sample, and delegates
+    to :func:`byline.llm.run_alignment_semantic` for the actual model call.
+    Returns ``([], "")`` rather than raising when the LLM is unavailable or
+    returns malformed output — semantic alignment is a best-effort overlay on
+    top of the deterministic checks and should never fail the audit.
     """
 
-    return ([], "")
+    # Local import keeps the optional ``anthropic`` dependency out of the
+    # alignment module's import graph.
+    from byline.llm import (
+        LLMResponseError,
+        LLMUnavailableError,
+        run_alignment_semantic,
+    )
+
+    repo_path = Path(repo_path)
+    readme_text = _read_readme(repo_path)
+    documented = extract_documented_artifacts(readme_text)
+    audit_summary: dict[str, Any] = {
+        "repo_path": str(repo_path),
+        "documented_artifacts": documented,
+    }
+    sampled_code = _sample_code_files(repo_path, readme_text)
+
+    try:
+        check_dicts, summary_text = run_alignment_semantic(
+            audit_summary, readme_text, sampled_code, anthropic_client
+        )
+    except (LLMUnavailableError, LLMResponseError) as exc:
+        logger.warning("Semantic alignment skipped: %s", exc)
+        return ([], "")
+    except Exception as exc:  # pragma: no cover — defensive against SDK quirks
+        logger.warning("Semantic alignment failed unexpectedly: %s", exc)
+        return ([], "")
+
+    checks: list[AlignmentCheck] = []
+    for d in check_dicts:
+        if not isinstance(d, dict):
+            logger.warning("Skipping non-dict semantic-alignment entry: %r", d)
+            continue
+        try:
+            checks.append(
+                AlignmentCheck(
+                    kind=d["kind"],
+                    source="llm",
+                    description=d["description"],
+                    doc_location=d.get("doc_location"),
+                    code_location=d.get("code_location"),
+                    severity=d["severity"],
+                )
+            )
+        except Exception as exc:
+            logger.warning("Skipping malformed semantic-alignment entry: %s", exc)
+    return checks, summary_text
 
 
 def _classify_overall(checks: list[AlignmentCheck]) -> str:
