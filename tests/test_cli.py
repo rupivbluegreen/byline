@@ -13,6 +13,7 @@ regression there would silently change the product's positioning.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from unittest.mock import patch
 
@@ -28,6 +29,15 @@ from byline.models import (
 )
 
 runner = CliRunner()
+
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+
+
+def _plain(text: str) -> str:
+    """Strip ANSI escapes and collapse whitespace so substring assertions
+    survive Rich's pretty-printing wraps in non-TTY CI runners."""
+    stripped = _ANSI_RE.sub("", text)
+    return re.sub(r"\s+", " ", stripped)
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 SYNTHETIC_REPO = FIXTURES_DIR / "synthetic_ai_repo"
@@ -323,9 +333,10 @@ def test_questions_help_lists_flags() -> None:
     result = runner.invoke(app, ["questions", "--help"])
 
     assert result.exit_code == 0, result.output
-    assert "--candidate" in result.stdout
-    assert "-n" in result.stdout
-    assert "--json" in result.stdout
+    plain = _plain(result.stdout)
+    assert "--candidate" in plain
+    assert "-n" in plain
+    assert "--json" in plain
 
 
 def test_chat_help_exits_zero() -> None:
@@ -434,4 +445,4 @@ def test_audit_help_mentions_no_history() -> None:
     result = runner.invoke(app, ["audit", "--help"])
 
     assert result.exit_code == 0, result.output
-    assert "--no-history" in result.stdout
+    assert "--no-history" in _plain(result.stdout)
