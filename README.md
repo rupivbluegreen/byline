@@ -15,29 +15,41 @@
 
 ## Install
 
+`byline` ships in two modes. The base install is deterministic and has no LLM dependency; the `[llm]` extra adds the Anthropic SDK and unlocks the subcommands that call Claude.
+
 ```bash
+# Base install (deterministic features only)
 pip install byline
+
+# Full install (includes LLM-powered subcommands)
+pip install 'byline[llm]'
 ```
 
-The optional `[llm]` extra pulls in the Anthropic SDK for the qualitative-pass feature:
-
-```bash
-pip install "byline[llm]"
-```
+The `questions` and `chat` subcommands require both the `[llm]` extra and a working `ANTHROPIC_API_KEY` in the environment. The `align` subcommand runs deterministically by default; the optional semantic pass is enabled via flag and also needs the extra and the API key. Every other command (`scan`, `baseline`, `audit`, and the deterministic `align`) works on the base install.
 
 ## Quickstart
 
-Three CLI commands cover the common workflows:
-
 ```bash
-# Just the target (fingerprints + disproportion analysis)
+# Audit (now includes history forensics, alignment, voice, boilerplate by default)
+byline audit ./candidate-submission --candidate candidate-username
+
+# Standalone alignment check
+byline align ./candidate-submission
+
+# Standalone alignment with semantic mode (requires LLM)
+byline align ./candidate-submission --with-llm
+
+# Generate interview questions (requires LLM)
+byline questions ./candidate-submission --candidate candidate-username -n 8
+
+# Open an interactive chat session over the audit (requires LLM)
+byline chat ./candidate-submission --candidate candidate-username
+
+# Just the target, without a baseline
 byline scan ./candidate-submission
 
 # Build the baseline alone
 byline baseline candidate-username
-
-# Full comparative audit
-byline audit ./candidate-submission --candidate candidate-username
 ```
 
 A `byline scan` run produces a short Markdown summary. The shape (illustrative, abbreviated):
@@ -59,6 +71,16 @@ align; treat as a soft signal worth a closer look.
 
 Run `byline --help` (or `byline <command> --help`) for the full flag list.
 
+## What's new in v0.2
+
+- Commit history forensics: timeline burst detection, first-commit paste detection, commit-message style profiling against the README, and author identity drift across the commit log.
+- Documentation-implementation alignment: a deterministic pass cross-checks README-documented CLI flags, env vars, commands, and dependencies against the code; an optional semantic pass under `[llm]` adds Claude-driven gap detection.
+- Within-repo self-baseline: compares the stylistic profile of commit messages, the README, and code comments, and reports the within-repo divergence as `consistent`, `notable`, or `significant`.
+- Voice and AI-use disclosure: first-person voice density in the README is reported as a positive presence signal, and explicit AI-use disclosure is surfaced as a positive trust signal that shifts the overall label toward `aligned`.
+- Boilerplate meta-file density: measures how completely a canonical meta-file slate is populated, with a severity bump for small repos where a full set is more notable.
+- New CLI subcommands: `byline align` (deterministic by default), `byline questions` (interview-question generator, LLM required), and `byline chat` (interactive REPL over the audit, LLM required).
+- New opt-out flag on `byline audit` to skip the commit-forensics pass when the input is a directory of files rather than a real git repo.
+
 ## Limitations
 
 > This report presents stylistic signals comparing a candidate's submission to their own observable writing baseline. It is one input into a hiring decision, never a determination of authorship, and must not be treated as evidence of misconduct. False positives are possible — non-native English writers, proofread submissions, tutorial-derived code, and team-authored repos can all produce divergent signals.
@@ -67,7 +89,9 @@ Run `byline --help` (or `byline <command> --help`) for the full flag list.
 
 **False positives.** Several plausible candidate profiles can produce divergent signals without any underlying authorship problem. Non-native English writers may show shifted typo rates and sentence-length distributions versus a baseline collected from native-language prose. Candidates who proofread their submission heavily can look stylistically different from their casual GitHub commits. Tutorial-derived code carries the tutorial author's voice. Team-authored repositories blend multiple writers. Candidates with sparse public GitHub history have small baselines, and small baselines produce noisy deltas; the report flags this case.
 
-**Scope.** `byline` v0.1 is English-only and GitHub-only. It reads prose and shell scripts; it does not analyse the code itself for AI patterns, and it does not attempt to identify which model (if any) generated a passage. Those questions are out of scope for this release.
+**Scope.** `byline` is English-only and GitHub-only. It reads prose and shell scripts; it does not analyse the code itself for stylistic signals, and it does not attempt to identify which model (if any) generated a passage. Those questions are out of scope.
+
+**History forensics requires a real git repo.** The commit-history pass (`history.timeline`, `history.messages`, `history.identity`, `history.file_evolutions`) reads from `.git`. A directory of files that was extracted from a zip or copied without its git history will produce a zeroed `HistoryFindings` result. When you want history signals, clone the submission with its full git history rather than unpacking a snapshot. The audit command also exposes a flag to skip this pass entirely when you know the input has no usable history.
 
 ## Ethical use
 

@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Repo fetcher helper (`byline/repo_fetcher.py`): context-managed
+  clone helper that materialises remote GitHub URLs into a real
+  filesystem checkout so the history, alignment, and self-baseline
+  passes can run uniformly across local paths and remote inputs.
 - Commit history forensics module (`byline/history.py`): timeline
   burst detection, commit-message style profiling, author identity drift
   detection, file-evolution paste detection.
