@@ -106,11 +106,7 @@ def render_findings(audit: AuditResult) -> str:
                 if remaining > 0:
                     lines.append(f"  ... and {remaining} more")
                 break
-            loc = (
-                f"{fp.file_path}:{fp.line_number}"
-                if fp.line_number is not None
-                else fp.file_path
-            )
+            loc = f"{fp.file_path}:{fp.line_number}" if fp.line_number is not None else fp.file_path
             lines.append(f"  - [{fp.category}] {fp.pattern} @ {loc}")
     else:
         lines.append("  (none)")
@@ -196,9 +192,7 @@ def _print_assistant_reply(reply: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def run_chat_session(
-    audit: AuditResult, repo_path: Path, anthropic_client: Any
-) -> None:
+def run_chat_session(audit: AuditResult, repo_path: Path, anthropic_client: Any) -> None:
     """Run an interactive REPL session over ``audit``.
 
     Blocks until the user exits (``/quit``, EOF, or two consecutive Ctrl+C).
@@ -221,10 +215,7 @@ def run_chat_session(
     conversation_history: list[dict] = []
 
     # Seed turn: prime the model with the audit summary + full JSON context.
-    seed_message = (
-        f"{summary}\n\n"
-        f"Audit JSON: {audit.model_dump_json(indent=2)}"
-    )
+    seed_message = f"{summary}\n\nAudit JSON: {audit.model_dump_json(indent=2)}"
     _seed_context(conversation_history, seed_message, anthropic_client)
 
     session: PromptSession = PromptSession()
@@ -272,9 +263,7 @@ def run_chat_session(
             continue
         if cmd == "reset":
             conversation_history.clear()
-            _seed_context(
-                conversation_history, seed_message, anthropic_client
-            )
+            _seed_context(conversation_history, seed_message, anthropic_client)
             print("(conversation history cleared; audit context re-seeded)")
             continue
         if cmd is not None:
@@ -356,9 +345,7 @@ def _handle_show(repo_path: Path, rest: str) -> None:
         print(f"... ({len(lines) - _SHOW_LINE_CAP} more lines omitted)")
 
 
-def _handle_questions(
-    audit: AuditResult, repo_path: Path, anthropic_client: Any
-) -> None:
+def _handle_questions(audit: AuditResult, repo_path: Path, anthropic_client: Any) -> None:
     """Invoke ``byline.questions.generate_questions`` and print the results."""
     try:
         # Deferred import: questions.py may not exist yet during parallel

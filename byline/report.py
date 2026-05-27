@@ -321,9 +321,7 @@ def _render_history(history: HistoryFindings) -> str:
 
     span_days = timeline.span_seconds / 86400.0
     bursty_word = "bursty" if timeline.bursty else "not bursty"
-    pasted_word = (
-        "Appears pasted." if timeline.first_commit_appears_pasted else "Looks iterated."
-    )
+    pasted_word = "Appears pasted." if timeline.first_commit_appears_pasted else "Looks iterated."
     drift_word = "Drift detected." if identity.drift_detected else "Consistent identity."
 
     lines: list[str] = [
@@ -347,10 +345,7 @@ def _render_history(history: HistoryFindings) -> str:
             f"{messages.self_baseline_divergence:.3f}."
         ),
         "",
-        (
-            f"Author identity: {len(identity.unique_author_emails)} distinct "
-            f"email(s). {drift_word}"
-        ),
+        (f"Author identity: {len(identity.unique_author_emails)} distinct email(s). {drift_word}"),
     ]
 
     if history.file_evolutions:
@@ -398,9 +393,7 @@ def _render_alignment(alignment: AlignmentFindings) -> str:
         for check in alignment.checks:
             # Pipe-escape descriptions so multi-segment text doesn't break the table.
             description = check.description.replace("|", "\\|")
-            lines.append(
-                f"| {check.kind} | {check.source} | {check.severity} | {description} |"
-            )
+            lines.append(f"| {check.kind} | {check.source} | {check.severity} | {description} |")
 
     return "\n".join(lines)
 
@@ -454,14 +447,8 @@ def _render_self_baseline(self_baseline: SelfBaselineFinding) -> str:
         [
             "## Self-baseline within-repo divergence",
             "",
-            (
-                "Commit messages vs. README: "
-                f"{self_baseline.commit_msg_vs_readme_distance:.3f}"
-            ),
-            (
-                "Code comments vs. README: "
-                f"{self_baseline.code_comment_vs_readme_distance:.3f}"
-            ),
+            (f"Commit messages vs. README: {self_baseline.commit_msg_vs_readme_distance:.3f}"),
+            (f"Code comments vs. README: {self_baseline.code_comment_vs_readme_distance:.3f}"),
             f"Within-repo divergence: **{self_baseline.within_repo_divergence}**",
             "",
             self_baseline.note,
@@ -471,10 +458,7 @@ def _render_self_baseline(self_baseline: SelfBaselineFinding) -> str:
 
 def _render_skipped_llm_note() -> str:
     """One-line blockquoted pointer when alignment was deterministic-only."""
-    return (
-        "> Semantic alignment and qualitative summary skipped. "
-        "Run with `--with-llm` to enable."
-    )
+    return "> Semantic alignment and qualitative summary skipped. Run with `--with-llm` to enable."
 
 
 def _render_methodology() -> str:

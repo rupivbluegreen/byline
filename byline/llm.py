@@ -297,9 +297,7 @@ def _call_anthropic(
             system=system_prompt,
             messages=[{"role": "user", "content": user_content}],
         )
-        text = "".join(
-            block.text for block in response.content if hasattr(block, "text")
-        )
+        text = "".join(block.text for block in response.content if hasattr(block, "text"))
         logger.debug(
             "anthropic call: input=%s output=%s",
             getattr(getattr(response, "usage", None), "input_tokens", None),
@@ -345,8 +343,7 @@ def run_alignment_semantic(
         f"{json.dumps(audit_summary, default=str, indent=2)}\n\n"
         "README:\n"
         f"{readme_text}\n\n"
-        "Sampled code:\n"
-        + ("\n".join(code_excerpt_lines) if code_excerpt_lines else "(none)")
+        "Sampled code:\n" + ("\n".join(code_excerpt_lines) if code_excerpt_lines else "(none)")
     )
 
     raw_checks = _call_anthropic(
@@ -361,13 +358,9 @@ def run_alignment_semantic(
     try:
         checks = json.loads(cleaned_checks)
     except json.JSONDecodeError as exc:
-        raise LLMResponseError(
-            f"Alignment semantic pass returned non-JSON output: {exc}"
-        ) from exc
+        raise LLMResponseError(f"Alignment semantic pass returned non-JSON output: {exc}") from exc
     if not isinstance(checks, list):
-        raise LLMResponseError(
-            "Alignment semantic pass JSON was not a list"
-        )
+        raise LLMResponseError("Alignment semantic pass JSON was not a list")
 
     summary_user_content = (
         "Audit summary (JSON):\n"
@@ -412,8 +405,7 @@ def run_questions(
         f"Generate exactly {n} follow-up interview questions.\n\n"
         "Audit summary (JSON):\n"
         f"{json.dumps(audit_summary, default=str, indent=2)}\n\n"
-        "Sampled code excerpts:\n"
-        + ("\n".join(excerpt_lines) if excerpt_lines else "(none)")
+        "Sampled code excerpts:\n" + ("\n".join(excerpt_lines) if excerpt_lines else "(none)")
     )
 
     raw = _call_anthropic(
@@ -427,9 +419,7 @@ def run_questions(
     try:
         questions = json.loads(raw)
     except json.JSONDecodeError as exc:
-        raise LLMResponseError(
-            f"Questions pass returned non-JSON output: {exc}"
-        ) from exc
+        raise LLMResponseError(f"Questions pass returned non-JSON output: {exc}") from exc
     if not isinstance(questions, list):
         raise LLMResponseError("Questions pass JSON was not a list")
 
@@ -464,9 +454,7 @@ def run_chat_turn(
             "anthropic_client is None; install byline[llm] and set ANTHROPIC_API_KEY"
         )
 
-    messages = list(conversation_history) + [
-        {"role": "user", "content": user_message}
-    ]
+    messages = list(conversation_history) + [{"role": "user", "content": user_message}]
     try:
         response = anthropic_client.messages.create(
             model="claude-sonnet-4-5",
@@ -475,9 +463,7 @@ def run_chat_turn(
             system=system_prompt,
             messages=messages,
         )
-        text = "".join(
-            block.text for block in response.content if hasattr(block, "text")
-        )
+        text = "".join(block.text for block in response.content if hasattr(block, "text"))
         logger.debug(
             "anthropic chat call: input=%s output=%s",
             getattr(getattr(response, "usage", None), "input_tokens", None),

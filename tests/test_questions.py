@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -23,7 +23,6 @@ from byline.models import (
     StyleProfile,
 )
 from byline.questions import generate_questions
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -84,25 +83,13 @@ def _build_synthetic_repo(tmp_path: Path) -> Path:
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / "docker-compose.yml").write_text(
-        "version: '3'\n"
-        "services:\n"
-        "  web:\n"
-        "    image: nginx\n"
-        "    ports:\n"
-        "      - '80:80'\n"
+        "version: '3'\nservices:\n  web:\n    image: nginx\n    ports:\n      - '80:80'\n"
     )
     (repo / "deploy.sh").write_text(
-        "#!/usr/bin/env bash\n"
-        "set -euo pipefail\n"
-        "echo 'deploying'\n"
-        "docker compose up -d\n"
+        "#!/usr/bin/env bash\nset -euo pipefail\necho 'deploying'\ndocker compose up -d\n"
     )
     (repo / "app.py").write_text(
-        "def main() -> None:\n"
-        "    print('hello')\n"
-        "\n"
-        "if __name__ == '__main__':\n"
-        "    main()\n"
+        "def main() -> None:\n    print('hello')\n\nif __name__ == '__main__':\n    main()\n"
     )
     return repo
 
@@ -362,9 +349,7 @@ def test_generate_questions_summary_shape(tmp_path: Path) -> None:
     user_content = kwargs["messages"][0]["content"]
     assert "Audit summary (JSON):" in user_content
     # Extract the JSON block following the marker, up to the next blank line / section
-    json_blob_start = user_content.index("Audit summary (JSON):") + len(
-        "Audit summary (JSON):"
-    )
+    json_blob_start = user_content.index("Audit summary (JSON):") + len("Audit summary (JSON):")
     rest = user_content[json_blob_start:].lstrip()
     # The blob is followed by "\n\nSampled code excerpts:"
     end = rest.index("\n\nSampled code excerpts:")

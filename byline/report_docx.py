@@ -389,8 +389,7 @@ def _add_ai_disclosure_callout(document: Document, voice: VoiceFinding) -> None:
     prefix_run.bold = True
     prefix_run.font.name = "Arial"
     body_run = lead_para.add_run(
-        "The candidate explicitly acknowledged the use of AI tools in "
-        f"{file_label}:"
+        f"The candidate explicitly acknowledged the use of AI tools in {file_label}:"
     )
     body_run.font.name = "Arial"
 
@@ -415,9 +414,7 @@ def _add_history(document: Document, history: HistoryFindings) -> None:
 
     span_days = timeline.span_seconds / 86400.0
     bursty_word = "bursty" if timeline.bursty else "not bursty"
-    pasted_word = (
-        "Appears pasted." if timeline.first_commit_appears_pasted else "Looks iterated."
-    )
+    pasted_word = "Appears pasted." if timeline.first_commit_appears_pasted else "Looks iterated."
     drift_word = "Drift detected." if identity.drift_detected else "Consistent identity."
 
     para1 = document.add_paragraph(
@@ -442,17 +439,14 @@ def _add_history(document: Document, history: HistoryFindings) -> None:
     _apply_arial(para3)
 
     para4 = document.add_paragraph(
-        f"Author identity: {len(identity.unique_author_emails)} distinct "
-        f"email(s). {drift_word}"
+        f"Author identity: {len(identity.unique_author_emails)} distinct email(s). {drift_word}"
     )
     _apply_arial(para4)
 
     if history.file_evolutions:
         document.add_heading("File evolution", level=2)
         columns = ("File", "Commits", "Largest single addition", "Pasted?")
-        table = document.add_table(
-            rows=1 + len(history.file_evolutions), cols=len(columns)
-        )
+        table = document.add_table(rows=1 + len(history.file_evolutions), cols=len(columns))
         try:
             table.style = "Light Grid Accent 1"
         except KeyError:
@@ -602,8 +596,7 @@ def _add_self_baseline(document: Document, self_baseline: SelfBaselineFinding) -
 def _add_skipped_llm_note(document: Document) -> None:
     """One-line pointer when alignment was deterministic-only."""
     para = document.add_paragraph(
-        "Semantic alignment and qualitative summary skipped. "
-        "Run with --with-llm to enable.",
+        "Semantic alignment and qualitative summary skipped. Run with --with-llm to enable.",
         style="Intense Quote",
     )
     _apply_arial(para)

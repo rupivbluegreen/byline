@@ -7,7 +7,6 @@ from pathlib import Path
 from byline.boilerplate import META_FILES_CHECKED, analyze_boilerplate
 from byline.models import BoilerplateFinding
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

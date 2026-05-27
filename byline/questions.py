@@ -262,9 +262,7 @@ def _alignment_gaps(audit: AuditResult) -> list[dict[str, Any]]:
     if audit.alignment is None:
         return []
 
-    non_info: list[AlignmentCheck] = [
-        c for c in audit.alignment.checks if c.severity != "info"
-    ]
+    non_info: list[AlignmentCheck] = [c for c in audit.alignment.checks if c.severity != "info"]
     # Sort by severity weight (significant > notable). Both map to int via
     # the disproportion severity mapping (significant=2, notable=1).
     ranked = sorted(
@@ -286,9 +284,7 @@ def _alignment_gaps(audit: AuditResult) -> list[dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 
-def _sample_file_excerpts(
-    audit: AuditResult, repo_path: Path
-) -> dict[str, str]:
+def _sample_file_excerpts(audit: AuditResult, repo_path: Path) -> dict[str, str]:
     """Pick up to three files from the repo that anchor strong fingerprint
     signals: one compose-like file, one shell script, one source file.
 
@@ -301,23 +297,17 @@ def _sample_file_excerpts(
     selected: list[str] = []
     seen: set[str] = set()
 
-    compose_pick = _pick_first_match(
-        counts, predicate=_is_compose_filename, repo_path=repo_path
-    )
+    compose_pick = _pick_first_match(counts, predicate=_is_compose_filename, repo_path=repo_path)
     if compose_pick is not None and compose_pick not in seen:
         selected.append(compose_pick)
         seen.add(compose_pick)
 
-    shell_pick = _pick_first_match(
-        counts, predicate=_is_shell_filename, repo_path=repo_path
-    )
+    shell_pick = _pick_first_match(counts, predicate=_is_shell_filename, repo_path=repo_path)
     if shell_pick is not None and shell_pick not in seen:
         selected.append(shell_pick)
         seen.add(shell_pick)
 
-    source_pick = _pick_first_match(
-        counts, predicate=_is_source_filename, repo_path=repo_path
-    )
+    source_pick = _pick_first_match(counts, predicate=_is_source_filename, repo_path=repo_path)
     if source_pick is not None and source_pick not in seen:
         selected.append(source_pick)
         seen.add(source_pick)
@@ -330,9 +320,7 @@ def _sample_file_excerpts(
     return excerpts
 
 
-def _pick_first_match(
-    counts: Counter[str], predicate, repo_path: Path
-) -> str | None:
+def _pick_first_match(counts: Counter[str], predicate, repo_path: Path) -> str | None:
     """Return the path with the highest fingerprint count whose name matches
     ``predicate`` and which exists in ``repo_path``. ``None`` if no match."""
     for path, _count in counts.most_common():

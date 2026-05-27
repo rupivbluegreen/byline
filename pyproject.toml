@@ -74,8 +74,12 @@ select = ["E", "F", "I", "B", "UP"]
 [tool.ruff.lint.per-file-ignores]
 # typer uses function calls in argument defaults as its standard idiom
 "byline/cli.py" = ["B008"]
+# LLM prompts are long natural-language strings that should not be wrapped
+"byline/llm.py" = ["E501"]
 # Test helper signatures are intentionally long for readability
 "tests/test_corpus.py" = ["E501"]
+"tests/test_questions.py" = ["E501"]
+"tests/test_self_baseline.py" = ["E501"]
 
 [tool.ruff.format]
 quote-style = "double"

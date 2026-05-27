@@ -22,7 +22,6 @@ from byline.llm import (
     strip_banned_phrases,
 )
 
-
 # ---------------------------------------------------------------------------
 # strip_banned_phrases
 # ---------------------------------------------------------------------------
@@ -310,9 +309,7 @@ def test_run_chat_turn_returns_text():
 
 
 def test_run_chat_turn_post_processes_banned_phrases():
-    client = _make_mock_client(
-        ["This is an AI detector that determines authorship."]
-    )
+    client = _make_mock_client(["This is an AI detector that determines authorship."])
     reply = run_chat_turn(
         system_prompt=CHAT_SYSTEM_PROMPT,
         conversation_history=[],

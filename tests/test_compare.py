@@ -417,9 +417,7 @@ def _make_messages(
 
 def _make_identity(*, drift: bool = False) -> AuthorIdentityFinding:
     return AuthorIdentityFinding(
-        unique_author_emails=(
-            ["a@x.com", "b@y.com"] if drift else ["a@x.com"]
-        ),
+        unique_author_emails=(["a@x.com", "b@y.com"] if drift else ["a@x.com"]),
         unique_author_names=["a"],
         drift_detected=drift,
     )

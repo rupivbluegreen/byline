@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from byline.history import (
     analyze_commit_messages,
     analyze_file_evolution,
@@ -20,7 +18,6 @@ from byline.models import (
     FileEvolutionFinding,
     HistoryFindings,
 )
-
 
 # ---------------------------------------------------------------------------
 # analyze_timeline

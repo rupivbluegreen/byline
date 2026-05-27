@@ -462,9 +462,7 @@ def questions(
         for i, q in enumerate(question_set.questions, 1):
             lines.append(f"## Q{i}. {q.text}")
             if q.grounding_file:
-                anchor = q.grounding_file + (
-                    f":{q.grounding_line}" if q.grounding_line else ""
-                )
+                anchor = q.grounding_file + (f":{q.grounding_line}" if q.grounding_line else "")
                 lines.append(f"_Grounding: {anchor}_  ")
             lines.append(f"_Rationale: {q.rationale}_  ")
             if q.signal_addressed:
@@ -611,9 +609,7 @@ def align(
     client = get_anthropic_client() if with_llm else None
 
     try:
-        findings = check_alignment(
-            repo_path, with_llm=with_llm, anthropic_client=client
-        )
+        findings = check_alignment(repo_path, with_llm=with_llm, anthropic_client=client)
     except SystemExit:
         raise
     except typer.Exit:
@@ -625,11 +621,7 @@ def align(
     if json_output:
         text = findings.model_dump_json(indent=2)
     else:
-        mode = (
-            "deterministic-only"
-            if findings.deterministic_only
-            else "deterministic + semantic"
-        )
+        mode = "deterministic-only" if findings.deterministic_only else "deterministic + semantic"
         lines: list[str] = [
             "# Documentation-Implementation Alignment",
             "",
@@ -646,9 +638,7 @@ def align(
             lines.append("|---|---|---|---|")
             for c in findings.checks:
                 desc = c.description.replace("|", "\\|")
-                lines.append(
-                    f"| {c.kind} | {c.source} | {c.severity} | {desc} |"
-                )
+                lines.append(f"| {c.kind} | {c.source} | {c.severity} | {desc} |")
         else:
             lines.append("_No alignment issues found._")
         text = "\n".join(lines)

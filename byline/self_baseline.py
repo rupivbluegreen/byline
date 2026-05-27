@@ -111,7 +111,7 @@ def _distance(a: StyleProfile, b: StyleProfile) -> float:
     """Euclidean distance in the 4-D normalized style space."""
 
     va, vb = _normalized_vector(a), _normalized_vector(b)
-    return math.sqrt(sum((x - y) ** 2 for x, y in zip(va, vb)))
+    return math.sqrt(sum((x - y) ** 2 for x, y in zip(va, vb, strict=True)))
 
 
 def _classify(d1: float, d2: float) -> _DivergenceLevel:
@@ -143,8 +143,7 @@ def _build_note(d1: float, d2: float) -> str:
     """One-line summary describing the two pairwise distances."""
 
     return (
-        f"Commit messages and README {_label_for(d1)}; "
-        f"code comments and README {_label_for(d2)}."
+        f"Commit messages and README {_label_for(d1)}; code comments and README {_label_for(d2)}."
     )
 
 
@@ -220,13 +219,13 @@ def _walk_source_files(repo_path: Path) -> Iterator[Path]:
 
 
 def _extract_python_docstrings(text: str) -> list[str]:
-    '''Pull out the bodies of triple-quoted strings from a Python source file.
+    """Pull out the bodies of triple-quoted strings from a Python source file.
 
     The detection is intentionally simple: we scan for triple-double-quote and
     triple-single-quote delimiters and capture the text between matching pairs.
     This is not a full Python parser — it will include any triple-quoted string,
     not just docstrings — which is fine for stylistic signal aggregation.
-    '''
+    """
 
     bodies: list[str] = []
     for delim in ('"""', "'''"):

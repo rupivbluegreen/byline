@@ -85,7 +85,7 @@ def _style_distance(a: StyleProfile, b: StyleProfile) -> float:
         b.typo_rate / _TYPO_SCALE,
         b.type_token_ratio,
     )
-    return math.sqrt(sum((x - y) ** 2 for x, y in zip(va, vb)))
+    return math.sqrt(sum((x - y) ** 2 for x, y in zip(va, vb, strict=True)))
 
 
 # ---------------------------------------------------------------------------
@@ -249,7 +249,9 @@ def analyze_timeline(repo_path: Path) -> CommitTimelineFinding:
         for left in range(total_commits):
             if right < left:
                 right = left
-            while right + 1 < total_commits and times[right + 1] - times[left] < _BURST_WINDOW_SECONDS:
+            while (
+                right + 1 < total_commits and times[right + 1] - times[left] < _BURST_WINDOW_SECONDS
+            ):
                 right += 1
             window_count = right - left + 1
             if window_count > max_window_count:
@@ -280,10 +282,7 @@ def analyze_timeline(repo_path: Path) -> CommitTimelineFinding:
     first_commit_appears_pasted = (
         first_commit_file_count >= _PASTED_FILE_COUNT_THRESHOLD
         and first_commit_loc >= _PASTED_LOC_THRESHOLD
-    ) or (
-        total_head_loc > 0
-        and first_commit_loc > _PASTED_HEAD_FRACTION * total_head_loc
-    )
+    ) or (total_head_loc > 0 and first_commit_loc > _PASTED_HEAD_FRACTION * total_head_loc)
 
     return CommitTimelineFinding(
         total_commits=total_commits,
@@ -441,9 +440,7 @@ def analyze_file_evolution(repo_path: Path, file_path: str) -> FileEvolutionFind
             continue
 
     largest_single_addition_lines = max(insertions_per_commit, default=0)
-    current_total_lines = head_content.count("\n") + (
-        0 if head_content.endswith("\n") else 1
-    )
+    current_total_lines = head_content.count("\n") + (0 if head_content.endswith("\n") else 1)
     if current_total_lines == 0:
         current_total_lines = 1
     appears_pasted = (

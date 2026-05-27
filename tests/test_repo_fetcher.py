@@ -163,10 +163,7 @@ def test_cloned_repo_rewrites_https_url_with_token(monkeypatch: pytest.MonkeyPat
     from byline.repo_fetcher import _build_clone_url
 
     monkeypatch.setenv("GITHUB_TOKEN", "tkn123")
-    assert (
-        _build_clone_url("https://github.com/foo/bar")
-        == "https://tkn123@github.com/foo/bar"
-    )
+    assert _build_clone_url("https://github.com/foo/bar") == "https://tkn123@github.com/foo/bar"
     # file:// must be left alone
     assert _build_clone_url("file:///tmp/x.git") == "file:///tmp/x.git"
     # ssh must be left alone
@@ -174,9 +171,7 @@ def test_cloned_repo_rewrites_https_url_with_token(monkeypatch: pytest.MonkeyPat
 
     # No token => no rewrite
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
-    assert (
-        _build_clone_url("https://github.com/foo/bar") == "https://github.com/foo/bar"
-    )
+    assert _build_clone_url("https://github.com/foo/bar") == "https://github.com/foo/bar"
 
 
 def test_cloned_repo_sets_no_terminal_prompt_env(
@@ -239,9 +234,11 @@ def test_cloned_repo_does_not_leak_temp_dirs(bare_repo_url: str) -> None:
     # Snapshot byline-related entries before/after; we only care that the
     # specific path we got handed back doesn't survive.
     with cloned_repo(bare_repo_url) as repo_path:
-        assert repo_path.is_relative_to(tmp_root) or str(repo_path).startswith(
-            str(tmp_root)
-        ) or str(repo_path).startswith("/tmp")
+        assert (
+            repo_path.is_relative_to(tmp_root)
+            or str(repo_path).startswith(str(tmp_root))
+            or str(repo_path).startswith("/tmp")
+        )
         existing = repo_path
     assert not existing.exists()
 

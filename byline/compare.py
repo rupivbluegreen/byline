@@ -290,9 +290,12 @@ def compute_deltas(baseline: StyleProfile, target: StyleProfile) -> list[Compara
 # ---------------------------------------------------------------------------
 
 
-_SIGNAL_LEVELS: tuple[
-    Literal["aligned", "mixed", "divergent", "highly_divergent"], ...
-] = ("aligned", "mixed", "divergent", "highly_divergent")
+_SIGNAL_LEVELS: tuple[Literal["aligned", "mixed", "divergent", "highly_divergent"], ...] = (
+    "aligned",
+    "mixed",
+    "divergent",
+    "highly_divergent",
+)
 
 
 def _v01_base_level(

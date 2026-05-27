@@ -82,9 +82,7 @@ def _build_clone_url(repo_url: str) -> str:
         return repo_url
 
     new_netloc = f"{token}@{parts.netloc}"
-    return urlunsplit(
-        (parts.scheme, new_netloc, parts.path, parts.query, parts.fragment)
-    )
+    return urlunsplit((parts.scheme, new_netloc, parts.path, parts.query, parts.fragment))
 
 
 def _redact_url(url: str) -> str:

@@ -482,8 +482,7 @@ def check_env_vars_referenced(env_vars: list[str], repo_path: Path) -> list[Alig
                 kind="env_var_documented_missing_in_code",
                 source="deterministic",
                 description=(
-                    f"README documents env var `{env_var}` but no code or "
-                    f"config file references it"
+                    f"README documents env var `{env_var}` but no code or config file references it"
                 ),
                 doc_location="README.md",
                 code_location=None,
@@ -702,7 +701,7 @@ def _sample_code_files(repo_path: Path, readme_text: str) -> dict[str, str]:
     if len(picked) < _MAX_SAMPLED_FILES:
         remaining = [f for f in code_files if f not in picked]
         remaining.sort(
-            key=lambda f: (f.stat().st_size if f.exists() else 0),
+            key=lambda f: f.stat().st_size if f.exists() else 0,
             reverse=True,
         )
         for candidate in remaining:

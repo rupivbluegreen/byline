@@ -20,7 +20,6 @@ from byline.self_baseline import (
     compute_self_baseline,
 )
 
-
 # ---------------------------------------------------------------------------
 # Git helpers
 # ---------------------------------------------------------------------------
@@ -87,7 +86,9 @@ def test_normalized_vector_all_zero() -> None:
 
 def test_distance_to_self_is_zero() -> None:
     """The distance between a profile and itself is exactly 0."""
-    p = _profile(em_dash_density=10.0, sophistication_score=0.3, typo_rate=5.0, type_token_ratio=0.5)
+    p = _profile(
+        em_dash_density=10.0, sophistication_score=0.3, typo_rate=5.0, type_token_ratio=0.5
+    )
     assert _distance(p, p) == 0.0
 
 
@@ -173,7 +174,11 @@ def test_collect_commit_messages_skips_merges(tmp_path: Path) -> None:
     )
     # Some git versions default to ``main`` instead of ``master``; tolerate either.
     branches = subprocess.run(
-        ["git", "branch", "--show-current"], cwd=tmp_path, capture_output=True, text=True, check=True
+        ["git", "branch", "--show-current"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
     ).stdout.strip()
     if branches == "side":
         subprocess.run(["git", "checkout", "-q", "main"], cwd=tmp_path, check=True)

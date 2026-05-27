@@ -359,9 +359,7 @@ def test_align_aligned_fixture_emits_markdown_overall() -> None:
 def test_align_misaligned_fixture_json_is_valid() -> None:
     """`byline align <misaligned-fixture> --json` emits parseable JSON."""
 
-    result = runner.invoke(
-        app, ["align", str(MISALIGNED_DOCS_REPO), "--json"]
-    )
+    result = runner.invoke(app, ["align", str(MISALIGNED_DOCS_REPO), "--json"])
 
     assert result.exit_code == 0, result.output + (result.stderr or "")
     payload = json.loads(result.stdout)
