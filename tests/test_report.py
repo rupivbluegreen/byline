@@ -564,3 +564,414 @@ def test_render_docx_without_llm_qualitative_says_unavailable(tmp_path) -> None:
     doc = Document(str(out))
     body = _docx_full_body_text(doc)
     assert "No LLM qualitative pass" in body
+
+
+# ---------------------------------------------------------------------------
+# v0.2 — new sections (history, alignment, voice, boilerplate, self_baseline)
+# ---------------------------------------------------------------------------
+
+
+from byline.models import (  # noqa: E402
+    AlignmentCheck,
+    AlignmentFindings,
+    AuthorIdentityFinding,
+    BoilerplateFinding,
+    CommitMessageStyleFinding,
+    CommitTimelineFinding,
+    FileEvolutionFinding,
+    HistoryFindings,
+    SelfBaselineFinding,
+    VoiceFinding,
+)
+
+
+def _history_findings() -> HistoryFindings:
+    return HistoryFindings(
+        timeline=CommitTimelineFinding(
+            total_commits=20,
+            span_seconds=86400 * 3,  # 3 days
+            burst_density=0.85,
+            burst_window_start=datetime(2026, 5, 25, 14, 0, 0, tzinfo=timezone.utc),
+            bursty=True,
+            first_commit_file_count=42,
+            first_commit_loc=3500,
+            first_commit_appears_pasted=True,
+        ),
+        messages=CommitMessageStyleFinding(
+            total_messages=18,
+            avg_length_chars=72.5,
+            style_profile=_zero_profile(),
+            debug_commit_ratio=0.05,
+            self_baseline_divergence=0.42,
+        ),
+        identity=AuthorIdentityFinding(
+            unique_author_emails=["alice@example.com", "ai-bot@example.com"],
+            unique_author_names=["Alice", "Coding Assistant"],
+            drift_detected=True,
+        ),
+        file_evolutions=[
+            FileEvolutionFinding(
+                file_path="src/main.py",
+                total_commits_touching=4,
+                largest_single_addition_lines=900,
+                appears_pasted=True,
+            ),
+            FileEvolutionFinding(
+                file_path="README.md",
+                total_commits_touching=6,
+                largest_single_addition_lines=80,
+                appears_pasted=False,
+            ),
+        ],
+    )
+
+
+def _alignment_findings(deterministic_only: bool = True) -> AlignmentFindings:
+    return AlignmentFindings(
+        checks=[
+            AlignmentCheck(
+                kind="cli_flag_documented_missing_in_code",
+                source="deterministic",
+                description="README mentions --foo flag, not found in CLI.",
+                doc_location="README.md:42",
+                code_location=None,
+                severity="notable",
+            ),
+            AlignmentCheck(
+                kind="env_var_documented_missing_in_code",
+                source="deterministic",
+                description="DOCS_VAR documented but unused in source.",
+                doc_location="README.md:88",
+                code_location=None,
+                severity="info",
+            ),
+        ],
+        deterministic_only=deterministic_only,
+        overall_alignment="minor_gaps",
+        llm_summary=(
+            None
+            if deterministic_only
+            else "Documentation broadly matches the implementation with minor gaps."
+        ),
+    )
+
+
+def _voice_finding(ai_disclosure: bool = False) -> VoiceFinding:
+    return VoiceFinding(
+        first_person_count=12,
+        first_person_per_1k_words=3.4,
+        has_first_person_voice=True,
+        ai_disclosure_found=ai_disclosure,
+        ai_disclosure_file="AI_USE.md" if ai_disclosure else None,
+        ai_disclosure_excerpt=(
+            "I used Claude to draft the initial scaffolding and refined by hand."
+            if ai_disclosure
+            else None
+        ),
+    )
+
+
+def _boilerplate_finding() -> BoilerplateFinding:
+    return BoilerplateFinding(
+        meta_files_present=["README.md", "LICENSE"],
+        meta_files_checked=["README.md", "LICENSE", "CONTRIBUTING.md", ".gitignore"],
+        density_ratio=0.5,
+        severity="notable",
+    )
+
+
+def _self_baseline_finding() -> SelfBaselineFinding:
+    return SelfBaselineFinding(
+        commit_msg_vs_readme_distance=0.71,
+        code_comment_vs_readme_distance=0.55,
+        within_repo_divergence="notable",
+        note="Commit messages read more terse than the README's expansive tone.",
+    )
+
+
+def _make_v02_result(
+    *,
+    history: HistoryFindings | None = None,
+    alignment: AlignmentFindings | None = None,
+    voice: VoiceFinding | None = None,
+    boilerplate: BoilerplateFinding | None = None,
+    self_baseline: SelfBaselineFinding | None = None,
+    llm_qualitative: str | None = None,
+) -> AuditResult:
+    return AuditResult(
+        target_repo="alice/take-home-submission",
+        candidate="alice",
+        baseline=_baseline(),
+        target_profile=_profile(),
+        fingerprints=_fingerprints(),
+        disproportions=_disproportions(),
+        deltas=_deltas(),
+        llm_qualitative=llm_qualitative,
+        overall_signal="divergent",
+        generated_at=datetime(2026, 5, 27, 12, 0, 0, tzinfo=timezone.utc),
+        history=history,
+        alignment=alignment,
+        voice=voice,
+        boilerplate=boilerplate,
+        self_baseline=self_baseline,
+    )
+
+
+# Markdown: AI-disclosure callout (positive framing)
+
+
+def test_render_markdown_ai_disclosure_positive_callout() -> None:
+    result = _make_v02_result(voice=_voice_finding(ai_disclosure=True))
+    md = render_markdown(result)
+    assert "## AI use disclosure" in md
+    assert "Positive signal" in md
+    assert "AI_USE.md" in md
+    assert "I used Claude to draft" in md
+    # Banned phrases must not appear in the AI-disclosure section.
+    assert "ai detector" not in md.lower()
+    assert "detect ai" not in md.lower()
+
+
+def test_render_markdown_ai_disclosure_callout_appears_before_overall_signal() -> None:
+    result = _make_v02_result(voice=_voice_finding(ai_disclosure=True))
+    md = render_markdown(result)
+    callout_pos = md.index("## AI use disclosure")
+    overall_pos = md.index("## Overall signal")
+    assert callout_pos < overall_pos
+
+
+def test_render_markdown_no_ai_disclosure_no_callout() -> None:
+    result = _make_v02_result(voice=_voice_finding(ai_disclosure=False))
+    md = render_markdown(result)
+    assert "## AI use disclosure" not in md
+
+
+# Backwards compatibility — v0.1 audits (all v0.2 fields None) must produce
+# identical section structure to before.
+
+
+def test_render_markdown_v01_compatible_omits_new_sections() -> None:
+    result = _make_v02_result()
+    md = render_markdown(result)
+    assert "## AI use disclosure" not in md
+    assert "## Commit history forensics" not in md
+    assert "## Documentation-implementation alignment" not in md
+    assert "## Voice and disclosure" not in md
+    assert "## Boilerplate density" not in md
+    assert "## Self-baseline within-repo divergence" not in md
+
+
+# History section
+
+
+def test_render_markdown_history_section_present_when_populated() -> None:
+    result = _make_v02_result(history=_history_findings())
+    md = render_markdown(result)
+    assert "## Commit history forensics" in md
+    # Timeline summary content.
+    assert "20 commits" in md
+    assert "bursty" in md
+    # First-commit summary mentions pasted-style observation.
+    assert "Appears pasted" in md
+    # Identity drift.
+    assert "Drift detected" in md
+    # File evolution table header.
+    assert "| File | Commits | Largest single addition | Pasted? |" in md
+    assert "src/main.py" in md
+    assert "README.md" in md
+
+
+def test_render_markdown_history_section_after_disproportions_before_qualitative() -> None:
+    result = _make_v02_result(history=_history_findings())
+    md = render_markdown(result)
+    disp_pos = md.index("## Disproportion findings")
+    hist_pos = md.index("## Commit history forensics")
+    qual_pos = md.index("## Qualitative interpretation")
+    assert disp_pos < hist_pos < qual_pos
+
+
+# Alignment section
+
+
+def test_render_markdown_alignment_section_deterministic_only() -> None:
+    result = _make_v02_result(alignment=_alignment_findings(deterministic_only=True))
+    md = render_markdown(result)
+    assert "## Documentation-implementation alignment" in md
+    assert "deterministic-only" in md
+    assert "minor_gaps" in md
+    assert "| Kind | Source | Severity | Description |" in md
+    assert "cli_flag_documented_missing_in_code" in md
+
+
+def test_render_markdown_alignment_section_with_semantic_summary() -> None:
+    result = _make_v02_result(alignment=_alignment_findings(deterministic_only=False))
+    md = render_markdown(result)
+    assert "deterministic + semantic" in md
+    assert "Documentation broadly matches the implementation" in md
+
+
+# Voice section
+
+
+def test_render_markdown_voice_section_present() -> None:
+    result = _make_v02_result(voice=_voice_finding(ai_disclosure=False))
+    md = render_markdown(result)
+    assert "## Voice and disclosure" in md
+    assert "12 occurrences" in md
+    assert "3.4 per 1000 words" in md
+    assert "No explicit AI-use disclosure detected" in md
+
+
+# Boilerplate section
+
+
+def test_render_markdown_boilerplate_section_present() -> None:
+    result = _make_v02_result(boilerplate=_boilerplate_finding())
+    md = render_markdown(result)
+    assert "## Boilerplate density" in md
+    assert "2 of 4 standard meta-files present" in md
+    assert "50%" in md
+    assert "README.md, LICENSE" in md
+
+
+# Self-baseline section
+
+
+def test_render_markdown_self_baseline_section_present() -> None:
+    result = _make_v02_result(self_baseline=_self_baseline_finding())
+    md = render_markdown(result)
+    assert "## Self-baseline within-repo divergence" in md
+    assert "0.710" in md
+    assert "0.550" in md
+    assert "notable" in md
+    assert "Commit messages read more terse" in md
+
+
+# Skipped-LLM note when alignment was run deterministic-only
+
+
+def test_render_markdown_skipped_llm_note_when_alignment_deterministic_only() -> None:
+    result = _make_v02_result(alignment=_alignment_findings(deterministic_only=True))
+    md = render_markdown(result)
+    assert "Run with `--with-llm` to enable" in md
+
+
+def test_render_markdown_no_skipped_llm_note_when_alignment_with_semantic() -> None:
+    result = _make_v02_result(alignment=_alignment_findings(deterministic_only=False))
+    md = render_markdown(result)
+    assert "Run with `--with-llm` to enable" not in md
+
+
+# Full ordering of new sections
+
+
+def test_render_markdown_v02_section_order_matches_spec() -> None:
+    result = _make_v02_result(
+        history=_history_findings(),
+        alignment=_alignment_findings(deterministic_only=True),
+        voice=_voice_finding(ai_disclosure=True),
+        boilerplate=_boilerplate_finding(),
+        self_baseline=_self_baseline_finding(),
+    )
+    md = render_markdown(result)
+    expected_order = [
+        "## AI use disclosure",
+        "## Overall signal",
+        "## Baseline profile",
+        "## Target profile",
+        "## Comparative deltas",
+        "## Fingerprint findings",
+        "## Disproportion findings",
+        "## Commit history forensics",
+        "## Documentation-implementation alignment",
+        "## Voice and disclosure",
+        "## Boilerplate density",
+        "## Self-baseline within-repo divergence",
+        "## Qualitative interpretation",
+        "## Methodology",
+    ]
+    positions = [md.index(h) for h in expected_order]
+    assert positions == sorted(positions), (
+        f"sections out of order: expected {expected_order}, got positions {positions}"
+    )
+
+
+# DOCX rendering for v0.2
+
+
+def test_render_docx_v02_full_sections(tmp_path) -> None:
+    from docx import Document
+
+    result = _make_v02_result(
+        history=_history_findings(),
+        alignment=_alignment_findings(deterministic_only=False),
+        voice=_voice_finding(ai_disclosure=True),
+        boilerplate=_boilerplate_finding(),
+        self_baseline=_self_baseline_finding(),
+    )
+    out = tmp_path / "report.docx"
+    render_docx(result, out)
+    assert out.exists()
+    assert out.stat().st_size > 1000
+
+    doc = Document(str(out))
+    body = _docx_full_body_text(doc)
+    for heading in (
+        "AI use disclosure",
+        "Commit history forensics",
+        "Documentation-implementation alignment",
+        "Voice and disclosure",
+        "Boilerplate density",
+        "Self-baseline within-repo divergence",
+    ):
+        assert heading in body, f"missing v0.2 heading: {heading!r}"
+    # Positive framing token must appear.
+    assert "Positive signal" in body
+    assert "AI_USE.md" in body
+    # File evolution table content.
+    assert "src/main.py" in body
+    # Alignment summary text.
+    assert "Documentation broadly matches the implementation" in body
+    # Boilerplate present-list.
+    assert "README.md" in body and "LICENSE" in body
+    # Self-baseline note.
+    assert "Commit messages read more terse" in body
+
+
+def test_render_docx_v02_omits_sections_when_fields_none(tmp_path) -> None:
+    from docx import Document
+
+    result = _make_v02_result()  # all v0.2 fields None
+    out = tmp_path / "report.docx"
+    render_docx(result, out)
+
+    doc = Document(str(out))
+    body = _docx_full_body_text(doc)
+    for missing in (
+        "AI use disclosure",
+        "Commit history forensics",
+        "Documentation-implementation alignment",
+        "Voice and disclosure",
+        "Boilerplate density",
+        "Self-baseline within-repo divergence",
+    ):
+        assert missing not in body, f"unexpected v0.2 heading present: {missing!r}"
+
+
+def test_render_docx_v02_no_banned_phrases(tmp_path) -> None:
+    from docx import Document
+
+    result = _make_v02_result(
+        history=_history_findings(),
+        alignment=_alignment_findings(deterministic_only=True),
+        voice=_voice_finding(ai_disclosure=True),
+        boilerplate=_boilerplate_finding(),
+        self_baseline=_self_baseline_finding(),
+    )
+    out = tmp_path / "report.docx"
+    render_docx(result, out)
+
+    doc = Document(str(out))
+    full = (_docx_full_body_text(doc) + "\n" + _docx_header_footer_text(doc)).lower()
+    assert "ai detector" not in full
+    assert "detect ai" not in full

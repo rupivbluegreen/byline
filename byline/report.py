@@ -16,12 +16,17 @@ from collections.abc import Iterable
 
 import byline
 from byline.models import (
+    AlignmentFindings,
     AuditResult,
     BaselineCorpus,
+    BoilerplateFinding,
     ComparativeDelta,
     DisproportionFinding,
     FingerprintHit,
+    HistoryFindings,
+    SelfBaselineFinding,
     StyleProfile,
+    VoiceFinding,
 )
 
 # ---------------------------------------------------------------------------
@@ -82,22 +87,48 @@ _OVERALL_GLOSS: dict[str, str] = {
 def render_markdown(result: AuditResult) -> str:
     """Render a comparative-signal report as Markdown.
 
-    Produces the 11-section structure described in spec §9.1: header,
-    blockquoted disclaimer (verbatim from §9.3), overall signal, baseline
-    profile, target profile, comparative deltas table, fingerprint findings,
-    disproportion findings, optional qualitative interpretation, methodology
-    pointer, and a footer with the tool version.
+    Produces the structure described in spec §9.1 plus the v0.2 §8 additions:
+    header, blockquoted disclaimer (verbatim from §9.3), optional positive
+    AI-disclosure callout, overall signal, baseline profile, target profile,
+    comparative deltas table, fingerprint findings, disproportion findings,
+    optional commit-history forensics, optional documentation-implementation
+    alignment, optional voice-and-disclosure section, optional boilerplate
+    density section, optional self-baseline within-repo divergence section, an
+    optional qualitative interpretation, methodology pointer, and a footer
+    with the tool version. Each v0.2 section renders only when the
+    corresponding ``AuditResult`` field is not ``None`` (backwards-compatible
+    with v0.1 audits).
     """
     parts: list[str] = []
     parts.append(_render_header(result))
     parts.append(_render_disclaimer())
+    # v0.2: positive AI-disclosure callout, inserted between disclaimer and
+    # overall signal so reviewers see it before any divergence framing.
+    if result.voice is not None and result.voice.ai_disclosure_found:
+        parts.append(_render_ai_disclosure_callout(result.voice))
     parts.append(_render_overall_signal(result))
     parts.append(_render_baseline_profile(result.baseline))
     parts.append(_render_target_profile(result.target_profile))
     parts.append(_render_deltas(result.deltas))
     parts.append(_render_fingerprints(result.fingerprints))
     parts.append(_render_disproportions(result.disproportions))
+    # v0.2: forensics + alignment + voice + boilerplate + self-baseline,
+    # inserted between disproportions and the LLM qualitative section.
+    if result.history is not None:
+        parts.append(_render_history(result.history))
+    if result.alignment is not None:
+        parts.append(_render_alignment(result.alignment))
+    if result.voice is not None:
+        parts.append(_render_voice(result.voice))
+    if result.boilerplate is not None:
+        parts.append(_render_boilerplate(result.boilerplate))
+    if result.self_baseline is not None:
+        parts.append(_render_self_baseline(result.self_baseline))
     parts.append(_render_qualitative(result.llm_qualitative))
+    # v0.2: if alignment was run deterministic-only, drop a one-line pointer to
+    # --with-llm so reviewers know richer semantic context is available.
+    if result.alignment is not None and result.alignment.deterministic_only:
+        parts.append(_render_skipped_llm_note())
     parts.append(_render_methodology())
     parts.append(_render_footer())
     return "\n\n".join(parts).rstrip() + "\n"
@@ -252,6 +283,198 @@ def _render_qualitative(text: str | None) -> str:
         quoted = f"> {text}"
     lines.append(quoted)
     return "\n".join(lines)
+
+
+def _render_ai_disclosure_callout(voice: VoiceFinding) -> str:
+    """Positive-framed callout for explicit AI-use disclosure (spec v0.2 §8).
+
+    Rendered above the overall-signal section so reviewers encounter the
+    candidate's transparency before any divergence narrative.
+    """
+    file_label = voice.ai_disclosure_file or "the candidate's documentation"
+    excerpt = voice.ai_disclosure_excerpt or ""
+    return "\n".join(
+        [
+            "## AI use disclosure",
+            "",
+            (
+                f"> **Positive signal.** The candidate explicitly acknowledged "
+                f"the use of AI tools in `{file_label}`:"
+            ),
+            ">",
+            f"> > {excerpt}",
+            "",
+            (
+                "This is a transparency indicator and shifts the overall signal "
+                'toward "aligned". Many of the divergence signals below may be '
+                "explained by the candidate's stated tool use."
+            ),
+        ]
+    )
+
+
+def _render_history(history: HistoryFindings) -> str:
+    """Commit history forensics — timeline, messages, identity, file evolution."""
+    timeline = history.timeline
+    messages = history.messages
+    identity = history.identity
+
+    span_days = timeline.span_seconds / 86400.0
+    bursty_word = "bursty" if timeline.bursty else "not bursty"
+    pasted_word = (
+        "Appears pasted." if timeline.first_commit_appears_pasted else "Looks iterated."
+    )
+    drift_word = "Drift detected." if identity.drift_detected else "Consistent identity."
+
+    lines: list[str] = [
+        "## Commit history forensics",
+        "",
+        (
+            f"Timeline: {timeline.total_commits} commits over {span_days:.1f} days. "
+            f"Burst density {timeline.burst_density:.2f}; {bursty_word}."
+        ),
+        "",
+        (
+            f"First commit: {timeline.first_commit_file_count} files, "
+            f"{timeline.first_commit_loc} LOC. {pasted_word}"
+        ),
+        "",
+        (
+            f"Commit messages: {messages.total_messages} non-merge messages, "
+            f"average length {messages.avg_length_chars:.0f} chars. "
+            f"Debug-style commit ratio: {messages.debug_commit_ratio:.0%}. "
+            f"Self-baseline divergence (vs. README): "
+            f"{messages.self_baseline_divergence:.3f}."
+        ),
+        "",
+        (
+            f"Author identity: {len(identity.unique_author_emails)} distinct "
+            f"email(s). {drift_word}"
+        ),
+    ]
+
+    if history.file_evolutions:
+        lines.extend(
+            [
+                "",
+                "### File evolution",
+                "",
+                "| File | Commits | Largest single addition | Pasted? |",
+                "|---|---|---|---|",
+            ]
+        )
+        for fe in history.file_evolutions:
+            pasted = "yes" if fe.appears_pasted else "no"
+            lines.append(
+                f"| {fe.file_path} | {fe.total_commits_touching} "
+                f"| {fe.largest_single_addition_lines} | {pasted} |"
+            )
+
+    return "\n".join(lines)
+
+
+def _render_alignment(alignment: AlignmentFindings) -> str:
+    """Documentation-implementation alignment — mode, overall, checks table."""
+    mode = "deterministic-only" if alignment.deterministic_only else "deterministic + semantic"
+    lines: list[str] = [
+        "## Documentation-implementation alignment",
+        "",
+        f"Mode: {mode}",
+        f"Overall: **{alignment.overall_alignment}**",
+    ]
+    if alignment.llm_summary:
+        lines.extend(["", alignment.llm_summary])
+
+    if alignment.checks:
+        lines.extend(
+            [
+                "",
+                "### Checks",
+                "",
+                "| Kind | Source | Severity | Description |",
+                "|---|---|---|---|",
+            ]
+        )
+        for check in alignment.checks:
+            # Pipe-escape descriptions so multi-segment text doesn't break the table.
+            description = check.description.replace("|", "\\|")
+            lines.append(
+                f"| {check.kind} | {check.source} | {check.severity} | {description} |"
+            )
+
+    return "\n".join(lines)
+
+
+def _render_voice(voice: VoiceFinding) -> str:
+    """Voice and disclosure section — first-person voice + AI-use disclosure."""
+    presence = "Present." if voice.has_first_person_voice else "Sparse."
+    disclosure = (
+        "Explicit AI-use disclosure found."
+        if voice.ai_disclosure_found
+        else "No explicit AI-use disclosure detected."
+    )
+    return "\n".join(
+        [
+            "## Voice and disclosure",
+            "",
+            (
+                f"First-person voice: {voice.first_person_count} occurrences "
+                f"({voice.first_person_per_1k_words:.1f} per 1000 words). "
+                f"{presence}"
+            ),
+            "",
+            disclosure,
+        ]
+    )
+
+
+def _render_boilerplate(boilerplate: BoilerplateFinding) -> str:
+    """Boilerplate density section — meta-files present out of checked."""
+    n_present = len(boilerplate.meta_files_present)
+    n_checked = len(boilerplate.meta_files_checked)
+    present_list = ", ".join(boilerplate.meta_files_present) or "none"
+    return "\n".join(
+        [
+            "## Boilerplate density",
+            "",
+            (
+                f"{n_present} of {n_checked} standard meta-files present "
+                f"({boilerplate.density_ratio:.0%}). "
+                f"Severity: **{boilerplate.severity}**."
+            ),
+            "",
+            f"Present: {present_list}",
+        ]
+    )
+
+
+def _render_self_baseline(self_baseline: SelfBaselineFinding) -> str:
+    """Self-baseline within-repo divergence — commit msg vs README, code vs README."""
+    return "\n".join(
+        [
+            "## Self-baseline within-repo divergence",
+            "",
+            (
+                "Commit messages vs. README: "
+                f"{self_baseline.commit_msg_vs_readme_distance:.3f}"
+            ),
+            (
+                "Code comments vs. README: "
+                f"{self_baseline.code_comment_vs_readme_distance:.3f}"
+            ),
+            f"Within-repo divergence: **{self_baseline.within_repo_divergence}**",
+            "",
+            self_baseline.note,
+        ]
+    )
+
+
+def _render_skipped_llm_note() -> str:
+    """One-line blockquoted pointer when alignment was deterministic-only."""
+    return (
+        "> Semantic alignment and qualitative summary skipped. "
+        "Run with `--with-llm` to enable."
+    )
 
 
 def _render_methodology() -> str:
