@@ -80,6 +80,130 @@ class ComparativeDelta(BaseModel):
     severity: Literal["aligned", "notable", "significant", "extreme"]
 
 
+class CommitTimelineFinding(BaseModel):
+    """Timeline signals from a repo's commit history."""
+
+    total_commits: int
+    span_seconds: float
+    burst_density: float
+    burst_window_start: datetime | None
+    bursty: bool
+    first_commit_file_count: int
+    first_commit_loc: int
+    first_commit_appears_pasted: bool
+
+
+class CommitMessageStyleFinding(BaseModel):
+    """Style profile of commit messages vs. within-repo self-baseline."""
+
+    total_messages: int
+    avg_length_chars: float
+    style_profile: StyleProfile
+    debug_commit_ratio: float
+    self_baseline_divergence: float
+
+
+class AuthorIdentityFinding(BaseModel):
+    """Author email/name spread across the commit history."""
+
+    unique_author_emails: list[str]
+    unique_author_names: list[str]
+    drift_detected: bool
+
+
+class FileEvolutionFinding(BaseModel):
+    """How a single file grew across the commit history."""
+
+    file_path: str
+    total_commits_touching: int
+    largest_single_addition_lines: int
+    appears_pasted: bool
+
+
+class HistoryFindings(BaseModel):
+    """Combined commit-history forensics output."""
+
+    timeline: CommitTimelineFinding
+    messages: CommitMessageStyleFinding
+    identity: AuthorIdentityFinding
+    file_evolutions: list[FileEvolutionFinding]
+
+
+class AlignmentCheck(BaseModel):
+    """A single alignment check between documentation and code."""
+
+    kind: Literal[
+        "cli_flag_documented_missing_in_code",
+        "env_var_documented_missing_in_code",
+        "command_documented_missing_file",
+        "dependency_documented_missing_in_manifest",
+        "doc_claims_feature_not_in_code",
+        "code_behavior_not_documented",
+        "config_documented_but_unused",
+        "command_documented_but_missing",
+    ]
+    source: Literal["deterministic", "llm"]
+    description: str
+    doc_location: str | None
+    code_location: str | None
+    severity: Literal["info", "notable", "significant"]
+
+
+class AlignmentFindings(BaseModel):
+    """Result of running alignment checks (deterministic and/or semantic)."""
+
+    checks: list[AlignmentCheck]
+    deterministic_only: bool
+    overall_alignment: Literal["aligned", "minor_gaps", "significant_gaps"]
+    llm_summary: str | None
+
+
+class VoiceFinding(BaseModel):
+    """First-person voice presence and AI-use disclosure signals."""
+
+    first_person_count: int
+    first_person_per_1k_words: float
+    has_first_person_voice: bool
+    ai_disclosure_found: bool
+    ai_disclosure_file: str | None
+    ai_disclosure_excerpt: str | None
+
+
+class BoilerplateFinding(BaseModel):
+    """Density of standard meta-files commonly present in real projects."""
+
+    meta_files_present: list[str]
+    meta_files_checked: list[str]
+    density_ratio: float
+    severity: Literal["normal", "notable", "significant"]
+
+
+class SelfBaselineFinding(BaseModel):
+    """Within-repo divergence between commit messages, README, and code comments."""
+
+    commit_msg_vs_readme_distance: float
+    code_comment_vs_readme_distance: float
+    within_repo_divergence: Literal["consistent", "notable", "significant"]
+    note: str
+
+
+class Question(BaseModel):
+    """A single interview question grounded in a specific file/line."""
+
+    text: str
+    grounding_file: str | None
+    grounding_line: int | None
+    signal_addressed: str
+    rationale: str
+
+
+class QuestionSet(BaseModel):
+    """A generated set of interview questions for a candidate submission."""
+
+    questions: list[Question]
+    generated_at: datetime
+
+
 class AuditResult(BaseModel):
     """Full comparative analysis output: signals, divergences, and an overall alignment summary."""
 
@@ -93,3 +217,8 @@ class AuditResult(BaseModel):
     llm_qualitative: str | None
     overall_signal: Literal["aligned", "mixed", "divergent", "highly_divergent"]
     generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    history: HistoryFindings | None = None
+    alignment: AlignmentFindings | None = None
+    voice: VoiceFinding | None = None
+    boilerplate: BoilerplateFinding | None = None
+    self_baseline: SelfBaselineFinding | None = None
