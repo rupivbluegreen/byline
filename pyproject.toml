@@ -1,0 +1,83 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "byline"
+version = "0.1.0"
+description = "Comparative attribution analysis tool for take-home hiring submissions on GitHub."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "Omni", email = "omni@rupiv.ai" },
+]
+keywords = ["comparative-analysis", "attribution", "github", "hiring", "code-review"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Quality Assurance",
+]
+dependencies = [
+    "typer>=0.12",
+    "httpx>=0.27",
+    "python-docx>=1.1",
+    "textstat>=0.7",
+    "language-tool-python>=2.8",
+    "rich>=13",
+    "pydantic>=2.7",
+]
+
+[project.optional-dependencies]
+llm = [
+    "anthropic>=0.40",
+]
+dev = [
+    "pytest>=8",
+    "pytest-cov",
+    "ruff",
+    "black",
+    "mypy",
+]
+
+[project.scripts]
+byline = "byline.cli:app"
+
+[project.urls]
+Homepage = "https://github.com/rupiv/byline"
+Issues = "https://github.com/rupiv/byline/issues"
+
+[tool.setuptools.packages.find]
+include = ["byline*"]
+exclude = ["tests*", "examples*"]
+
+[tool.setuptools.package-data]
+byline = ["data/*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.black]
+line-length = 100
+target-version = ["py310"]
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+addopts = "--cov=byline --cov-report=term-missing --cov-fail-under=75"
+testpaths = ["tests"]

@@ -1,0 +1,16 @@
+byline
+Copyright 2026 Omni
+
+This product includes software developed by Omni.
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may
+not use this software except in compliance with the License. A copy of
+the License is included in the LICENSE file at the root of this
+distribution, and is also available at:
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+byline is a comparative attribution analysis tool that surfaces signals
+of divergence between a candidate's GitHub submission and a personalized
+baseline built from their public history. It is intended as an
+investigative aid for reviewers, not as an authorship verdict.
