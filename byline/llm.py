@@ -1,16 +1,22 @@
-"""Optional Anthropic-backed qualitative commentary pass. See spec §10.
+"""Optional LLM-backed qualitative commentary pass. See spec §10.
 
 The LLM is asked to *interpret* comparative signals, never to determine
 authorship. All output language must use words like "divergence", "signals",
 "indicators", and "comparative analysis". The module is a no-op (returns
-``None``) when ``ANTHROPIC_API_KEY`` is unset or the ``anthropic`` package
-is not installed — failure to call the LLM never crashes an audit.
+``None``) when no LLM provider is configured — failure to call the LLM never
+crashes an audit.
 
 v0.2 §7 adds prompt constants and helper functions for the alignment,
 questions, and chat features. These additions sit alongside v0.1's
 ``qualitative_pass`` (unchanged) and use a defense-in-depth post-processor
 (``strip_banned_phrases``) that scrubs prohibited terminology from any LLM
 output before it reaches the caller.
+
+v0.3 introduces a provider abstraction (see ``byline.llm_provider``) so
+the same prompts and scrubbing apply uniformly across Anthropic, OpenAI,
+and any OpenAI-compatible self-hosted endpoint (Ollama, vLLM, LM Studio,
+llama.cpp). The legacy raw-anthropic-client call path is preserved via a
+backwards-compat shim.
 """
 
 from __future__ import annotations
@@ -23,6 +29,7 @@ from collections import Counter
 from importlib import import_module
 from typing import Any
 
+from byline.llm_provider import LLMProvider, get_llm_provider
 from byline.models import AuditResult
 
 logger = logging.getLogger(__name__)
@@ -34,8 +41,8 @@ logger = logging.getLogger(__name__)
 
 
 class LLMUnavailableError(RuntimeError):
-    """Raised when an LLM is required but ANTHROPIC_API_KEY is missing
-    or the ``anthropic`` package isn't installed."""
+    """Raised when an LLM is required but no provider is configured (no API
+    key set, or the relevant SDK isn't installed)."""
 
 
 class LLMResponseError(RuntimeError):
@@ -79,41 +86,30 @@ signals alongside your prose."""
 
 
 def qualitative_pass(result: AuditResult) -> str | None:
-    """Optional Claude qualitative interpretation of comparative signals.
+    """Optional LLM qualitative interpretation of comparative signals.
 
     Returns the model's prose output, or ``None`` if the LLM pass is skipped
     or fails for any reason. Never raises.
     """
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        logger.warning("ANTHROPIC_API_KEY not set; skipping LLM qualitative pass")
-        return None
-
-    try:
-        anthropic = import_module("anthropic")
-    except ImportError:
-        logger.warning("anthropic package not installed; install byline[llm] to enable")
+    provider = get_llm_provider()
+    if provider is None:
+        logger.warning("no LLM provider available; skipping qualitative pass")
         return None
 
     user_message = _build_user_message(result)
 
     try:
-        client = anthropic.Anthropic()
-        message = client.messages.create(
-            model="claude-sonnet-4-5",
+        text = provider.generate(
+            SYSTEM_PROMPT,
+            user_message,
             max_tokens=600,
             temperature=0.2,
-            system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": user_message}],
         )
-    except anthropic.APIError as exc:
-        logger.warning("Anthropic API error during qualitative pass: %s", exc)
-        return None
     except Exception as exc:  # network errors, auth errors, etc.
         logger.warning("Unexpected error during qualitative pass: %s", exc)
         return None
 
-    return "".join(block.text for block in message.content if hasattr(block, "text"))
+    return text
 
 
 # ---------------------------------------------------------------------------
@@ -246,51 +242,40 @@ def strip_banned_phrases(text: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Anthropic client helper (lazy import, env-driven)
+# Provider helpers
 # ---------------------------------------------------------------------------
 
 
 def get_anthropic_client() -> Any:
-    """Try to instantiate an Anthropic client.
+    """Backwards-compat shim. Returns the configured provider (which
+    duck-types like a client for the purposes of llm.py internals).
+    Prefer ``get_llm_provider()`` in new code.
 
-    Returns ``None`` if the package isn't installed or ``ANTHROPIC_API_KEY``
-    is missing. Centralizes the lazy-import / no-key fallback used by other
-    modules (questions.py, chat.py).
+    Returns ``None`` if no provider is configured. The historical contract
+    of "returns None when no key is set" is preserved.
     """
-    key = os.environ.get("ANTHROPIC_API_KEY")
-    if not key:
-        return None
-    try:
-        anthropic = import_module("anthropic")
-    except ImportError:
-        return None
-    try:
-        return anthropic.Anthropic()
-    except Exception:
-        return None
+    return get_llm_provider()
 
 
 # ---------------------------------------------------------------------------
-# Anthropic call wrapper used by the three v0.2 entry points
+# Provider call wrapper used by the three v0.2 entry points
 # ---------------------------------------------------------------------------
 
 
-def _call_anthropic(
-    client: Any,
+def _legacy_anthropic_call(
+    raw_client: Any,
     system_prompt: str,
     user_content: str,
-    max_tokens: int = 1500,
-    temperature: float = 0.2,
+    max_tokens: int,
+    temperature: float,
 ) -> str:
-    """Single-turn Anthropic call. Raises ``LLMUnavailableError`` on missing
-    client and ``LLMResponseError`` on API failures."""
+    """Backwards-compat path for callers still passing a raw anthropic client.
 
-    if client is None:
-        raise LLMUnavailableError(
-            "anthropic_client is None; install byline[llm] and set ANTHROPIC_API_KEY"
-        )
+    Mirrors the v0.2 ``_call_anthropic`` implementation. Deprecated; will
+    be removed in a future release once external callers migrate.
+    """
     try:
-        response = client.messages.create(
+        response = raw_client.messages.create(
             model="claude-sonnet-4-5",
             max_tokens=max_tokens,
             temperature=temperature,
@@ -299,15 +284,52 @@ def _call_anthropic(
         )
         text = "".join(block.text for block in response.content if hasattr(block, "text"))
         logger.debug(
-            "anthropic call: input=%s output=%s",
+            "anthropic (legacy) call: input=%s output=%s",
             getattr(getattr(response, "usage", None), "input_tokens", None),
             getattr(getattr(response, "usage", None), "output_tokens", None),
         )
         return text
-    except (LLMUnavailableError, LLMResponseError):
-        raise
     except Exception as exc:
         raise LLMResponseError(f"Anthropic call failed: {exc}") from exc
+
+
+def _call_provider(
+    provider: Any,
+    system_prompt: str,
+    user_content: str,
+    *,
+    max_tokens: int = 1500,
+    temperature: float = 0.2,
+    model: str | None = None,
+) -> str:
+    """Single-turn provider call. Raises ``LLMUnavailableError`` when
+    ``provider`` is ``None`` and ``LLMResponseError`` on transport failure.
+
+    Backwards-compat: when ``provider`` is not an ``LLMProvider`` instance
+    (e.g., an external caller passed a raw anthropic client), this falls
+    back to the legacy ``client.messages.create(...)`` path.
+    """
+    if provider is None:
+        raise LLMUnavailableError(
+            "provider is None; install byline-audit[llm] and set "
+            "ANTHROPIC_API_KEY or OPENAI_API_KEY"
+        )
+    from byline.llm_provider import LLMProviderError as _ProviderError
+
+    if not isinstance(provider, LLMProvider):
+        return _legacy_anthropic_call(
+            provider, system_prompt, user_content, max_tokens, temperature
+        )
+    try:
+        return provider.generate(
+            system_prompt,
+            user_content,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            model=model,
+        )
+    except _ProviderError as exc:
+        raise LLMResponseError(str(exc)) from exc
 
 
 # ---------------------------------------------------------------------------
@@ -319,18 +341,26 @@ def run_alignment_semantic(
     audit_summary: dict[str, Any],
     readme_text: str,
     sampled_code: dict[str, str],
-    anthropic_client: Any,
+    provider: Any = None,
+    *,
+    anthropic_client: Any = None,
 ) -> tuple[list[dict], str]:
-    """Call Claude with ``ALIGNMENT_SEMANTIC_SYSTEM_PROMPT``.
+    """Call the configured provider with ``ALIGNMENT_SEMANTIC_SYSTEM_PROMPT``.
 
     Returns ``(list_of_check_dicts, llm_summary_text)``.
     ``list_of_check_dicts`` is parsed JSON. ``llm_summary_text`` comes from a
     follow-up call using ``ALIGNMENT_SUMMARY_PROMPT``. Both outputs are passed
     through ``strip_banned_phrases``.
+
+    ``anthropic_client`` is accepted as a deprecated alias for ``provider``
+    and routes through the legacy raw-client path inside ``_call_provider``.
     """
-    if anthropic_client is None:
+    if provider is None and anthropic_client is not None:
+        provider = anthropic_client
+    if provider is None:
         raise LLMUnavailableError(
-            "anthropic_client is None; install byline[llm] and set ANTHROPIC_API_KEY"
+            "provider is None; install byline-audit[llm] and set "
+            "ANTHROPIC_API_KEY or OPENAI_API_KEY"
         )
 
     code_excerpt_lines: list[str] = []
@@ -346,8 +376,8 @@ def run_alignment_semantic(
         "Sampled code:\n" + ("\n".join(code_excerpt_lines) if code_excerpt_lines else "(none)")
     )
 
-    raw_checks = _call_anthropic(
-        anthropic_client,
+    raw_checks = _call_provider(
+        provider,
         ALIGNMENT_SEMANTIC_SYSTEM_PROMPT,
         semantic_user_content,
         max_tokens=1500,
@@ -368,8 +398,8 @@ def run_alignment_semantic(
         "Semantic alignment checks (JSON):\n"
         f"{json.dumps(checks, indent=2)}"
     )
-    raw_summary = _call_anthropic(
-        anthropic_client,
+    raw_summary = _call_provider(
+        provider,
         ALIGNMENT_SUMMARY_PROMPT,
         summary_user_content,
         max_tokens=1500,
@@ -384,16 +414,23 @@ def run_questions(
     audit_summary: dict[str, Any],
     sampled_excerpts: dict[str, str],
     n: int,
-    anthropic_client: Any,
+    provider: Any = None,
+    *,
+    anthropic_client: Any = None,
 ) -> list[dict]:
-    """Call Claude with ``QUESTIONS_SYSTEM_PROMPT``, asking for ``n`` questions.
+    """Call the provider with ``QUESTIONS_SYSTEM_PROMPT``, asking for ``n`` questions.
 
     Returns parsed JSON list of question dicts. Each question's ``text`` is
     passed through ``strip_banned_phrases``.
+
+    ``anthropic_client`` is accepted as a deprecated alias for ``provider``.
     """
-    if anthropic_client is None:
+    if provider is None and anthropic_client is not None:
+        provider = anthropic_client
+    if provider is None:
         raise LLMUnavailableError(
-            "anthropic_client is None; install byline[llm] and set ANTHROPIC_API_KEY"
+            "provider is None; install byline-audit[llm] and set "
+            "ANTHROPIC_API_KEY or OPENAI_API_KEY"
         )
 
     excerpt_lines: list[str] = []
@@ -408,8 +445,8 @@ def run_questions(
         "Sampled code excerpts:\n" + ("\n".join(excerpt_lines) if excerpt_lines else "(none)")
     )
 
-    raw = _call_anthropic(
-        anthropic_client,
+    raw = _call_provider(
+        provider,
         QUESTIONS_SYSTEM_PROMPT,
         user_content,
         max_tokens=2000,
@@ -440,36 +477,104 @@ def run_chat_turn(
     system_prompt: str,
     conversation_history: list[dict],
     user_message: str,
-    anthropic_client: Any,
+    provider: Any = None,
+    *,
+    anthropic_client: Any = None,
 ) -> str:
     """One chat turn.
 
-    Appends ``user_message`` to ``conversation_history``, calls Claude, and
-    returns the text reply (post-processed via ``strip_banned_phrases``).
-    The caller is responsible for persisting the updated history; this
-    function does not mutate the passed-in list.
+    Appends ``user_message`` to ``conversation_history``, calls the
+    provider, and returns the text reply (post-processed via
+    ``strip_banned_phrases``). The caller is responsible for persisting
+    the updated history; this function does not mutate the passed-in list.
+
+    For multi-turn chat, the conversation history is folded into a single
+    user prompt so that the provider abstraction stays single-turn. This
+    matches v0.2 semantics for short interactive sessions.
+
+    ``anthropic_client`` is accepted as a deprecated alias for ``provider``;
+    when supplied, the legacy native multi-message path is taken.
     """
-    if anthropic_client is None:
+    if provider is None and anthropic_client is not None:
+        provider = anthropic_client
+    if provider is None:
         raise LLMUnavailableError(
-            "anthropic_client is None; install byline[llm] and set ANTHROPIC_API_KEY"
+            "provider is None; install byline-audit[llm] and set "
+            "ANTHROPIC_API_KEY or OPENAI_API_KEY"
         )
 
-    messages = list(conversation_history) + [{"role": "user", "content": user_message}]
-    try:
-        response = anthropic_client.messages.create(
-            model="claude-sonnet-4-5",
-            max_tokens=2000,
-            temperature=0.2,
-            system=system_prompt,
-            messages=messages,
-        )
-        text = "".join(block.text for block in response.content if hasattr(block, "text"))
-        logger.debug(
-            "anthropic chat call: input=%s output=%s",
-            getattr(getattr(response, "usage", None), "input_tokens", None),
-            getattr(getattr(response, "usage", None), "output_tokens", None),
-        )
-    except Exception as exc:
-        raise LLMResponseError(f"Anthropic chat call failed: {exc}") from exc
+    # Backwards-compat: a raw anthropic client takes the legacy multi-message
+    # path so prior callers still receive native chat-history handling.
+    if not isinstance(provider, LLMProvider):
+        messages = list(conversation_history) + [{"role": "user", "content": user_message}]
+        try:
+            response = provider.messages.create(
+                model="claude-sonnet-4-5",
+                max_tokens=2000,
+                temperature=0.2,
+                system=system_prompt,
+                messages=messages,
+            )
+            text = "".join(block.text for block in response.content if hasattr(block, "text"))
+            logger.debug(
+                "anthropic (legacy) chat call: input=%s output=%s",
+                getattr(getattr(response, "usage", None), "input_tokens", None),
+                getattr(getattr(response, "usage", None), "output_tokens", None),
+            )
+        except Exception as exc:
+            raise LLMResponseError(f"Anthropic chat call failed: {exc}") from exc
+        return strip_banned_phrases(text)
 
+    # Provider path: fold history into the user content.
+    if conversation_history:
+        history_lines: list[str] = ["Prior conversation:"]
+        for msg in conversation_history:
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+            history_lines.append(f"[{role}] {content}")
+        history_lines.append("")
+        history_lines.append(f"Current user message:\n{user_message}")
+        folded_user = "\n".join(history_lines)
+    else:
+        folded_user = user_message
+
+    text = _call_provider(
+        provider,
+        system_prompt,
+        folded_user,
+        max_tokens=2000,
+        temperature=0.2,
+    )
     return strip_banned_phrases(text)
+
+
+# ---------------------------------------------------------------------------
+# Legacy import-module reference (kept for tests that patch this name)
+# ---------------------------------------------------------------------------
+#
+# ``test_get_anthropic_client_with_key_no_package`` patches
+# ``byline.llm.import_module`` to simulate a missing anthropic package.
+# The provider lookup now lives in ``byline.llm_provider``, so the legacy
+# patch is intercepted via ``get_anthropic_client``'s indirection through
+# ``get_llm_provider``. Keep the reference here so older tests that still
+# monkeypatch ``byline.llm.import_module`` don't raise AttributeError.
+
+__all__ = [
+    "SYSTEM_PROMPT",
+    "ALIGNMENT_SEMANTIC_SYSTEM_PROMPT",
+    "ALIGNMENT_SUMMARY_PROMPT",
+    "QUESTIONS_SYSTEM_PROMPT",
+    "CHAT_SYSTEM_PROMPT",
+    "BANNED_PHRASES",
+    "strip_banned_phrases",
+    "LLMUnavailableError",
+    "LLMResponseError",
+    "LLMProvider",
+    "get_llm_provider",
+    "get_anthropic_client",
+    "qualitative_pass",
+    "run_alignment_semantic",
+    "run_questions",
+    "run_chat_turn",
+    "import_module",
+]

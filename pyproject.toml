@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "byline-audit"
-version = "0.2.0"
+version = "0.3.0"
 description = "Comparative attribution analysis tool for take-home hiring submissions on GitHub."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -41,6 +41,7 @@ dependencies = [
 [project.optional-dependencies]
 llm = [
     "anthropic>=0.40",
+    "openai>=1.0",
 ]
 dev = [
     "pytest>=8",

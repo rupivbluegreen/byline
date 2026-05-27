@@ -1,4 +1,9 @@
-"""Tests for v0.2 LLM additions: prompts, post-processing, and helpers (§7)."""
+"""Tests for v0.2 LLM additions: prompts, post-processing, and helpers (§7).
+
+v0.3 update: callers now pass an ``LLMProvider`` (see
+``byline.llm_provider``) rather than a raw anthropic client. Tests mock the
+provider's ``generate`` method directly.
+"""
 
 from __future__ import annotations
 
@@ -21,6 +26,7 @@ from byline.llm import (
     run_questions,
     strip_banned_phrases,
 )
+from byline.llm_provider import LLMProvider
 
 # ---------------------------------------------------------------------------
 # strip_banned_phrases
@@ -86,21 +92,22 @@ def test_prompt_constants_are_strings():
 
 
 # ---------------------------------------------------------------------------
-# get_anthropic_client
+# get_anthropic_client (backwards-compat shim over get_llm_provider)
 # ---------------------------------------------------------------------------
 
 
 def test_get_anthropic_client_no_key(monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("BYLINE_LLM_PROVIDER", raising=False)
     assert get_anthropic_client() is None
 
 
 def test_get_anthropic_client_with_key_no_package(monkeypatch):
     """If the key is set but the package isn't importable, returns None."""
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    monkeypatch.delenv("BYLINE_LLM_PROVIDER", raising=False)
 
-    # byline.llm imports ``import_module`` at module top level, so patch the
-    # reference inside byline.llm directly.
     from importlib import import_module as real_import_module
 
     def fake_import_module(name, *args, **kwargs):
@@ -108,27 +115,47 @@ def test_get_anthropic_client_with_key_no_package(monkeypatch):
             raise ImportError("simulated")
         return real_import_module(name, *args, **kwargs)
 
-    monkeypatch.setattr("byline.llm.import_module", fake_import_module)
+    # The lazy import happens inside byline.llm_provider.AnthropicProvider.__init__.
+    monkeypatch.setattr("byline.llm_provider.import_module", fake_import_module, raising=False)
+    # Fallback: patch importlib's import_module reference directly so the
+    # local ``from importlib import import_module`` inside the provider
+    # __init__ resolves to our shim.
+    import importlib
+
+    monkeypatch.setattr(importlib, "import_module", fake_import_module)
     assert get_anthropic_client() is None
 
 
+def test_get_anthropic_client_returns_provider(monkeypatch):
+    """The shim returns an LLMProvider instance when the env is configured."""
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    monkeypatch.delenv("BYLINE_LLM_PROVIDER", raising=False)
+
+    # Stub out the AnthropicProvider so we don't actually instantiate the SDK.
+    fake_provider = MagicMock(spec=LLMProvider)
+    fake_provider.name = "anthropic"
+    fake_provider.default_model = "claude-sonnet-4-5"
+
+    import byline.llm_provider as lp
+
+    monkeypatch.setattr(lp, "AnthropicProvider", lambda **kwargs: fake_provider)
+
+    result = get_anthropic_client()
+    assert result is fake_provider
+
+
 # ---------------------------------------------------------------------------
-# Mock client helpers
+# Mock provider helper
 # ---------------------------------------------------------------------------
 
 
-def _make_mock_client(text_responses: list[str]) -> MagicMock:
-    """Return a mock anthropic-like client whose messages.create returns the
-    successive text_responses on each call."""
-    client = MagicMock()
-    responses = []
-    for text in text_responses:
-        resp = MagicMock()
-        resp.content = [MagicMock(text=text)]
-        resp.usage = MagicMock(input_tokens=100, output_tokens=50)
-        responses.append(resp)
-    client.messages.create.side_effect = responses
-    return client
+def make_mock_provider(*texts: str) -> MagicMock:
+    """Mock provider whose ``generate()`` returns successive texts."""
+    p = MagicMock(spec=LLMProvider)
+    p.name = "mock"
+    p.default_model = "mock"
+    p.generate.side_effect = list(texts)
+    return p
 
 
 # ---------------------------------------------------------------------------
@@ -149,13 +176,13 @@ def test_run_alignment_semantic_returns_tuple():
         ]
     )
     summary_text = "Comparative signals indicate moderate divergence."
-    client = _make_mock_client([checks_json, summary_text])
+    provider = make_mock_provider(checks_json, summary_text)
 
     checks, summary = run_alignment_semantic(
         audit_summary={"score": 0.5},
         readme_text="# README\nclaims X",
         sampled_code={"main.py": "print('hi')"},
-        anthropic_client=client,
+        provider=provider,
     )
 
     assert isinstance(checks, list)
@@ -163,42 +190,48 @@ def test_run_alignment_semantic_returns_tuple():
     assert checks[0]["kind"] == "doc_claims_feature_not_in_code"
     assert summary == summary_text
     # Two calls: one for checks, one for summary
-    assert client.messages.create.call_count == 2
+    assert provider.generate.call_count == 2
+
+    # First call should have used the semantic prompt; second the summary prompt.
+    first_call_args = provider.generate.call_args_list[0]
+    second_call_args = provider.generate.call_args_list[1]
+    assert first_call_args.args[0] == ALIGNMENT_SEMANTIC_SYSTEM_PROMPT
+    assert second_call_args.args[0] == ALIGNMENT_SUMMARY_PROMPT
 
 
 def test_run_alignment_semantic_post_processes_banned_phrases():
     checks_json = json.dumps([])
     summary_text = "This tool acts as an AI detector for hiring."
-    client = _make_mock_client([checks_json, summary_text])
+    provider = make_mock_provider(checks_json, summary_text)
 
     _checks, summary = run_alignment_semantic(
         audit_summary={},
         readme_text="",
         sampled_code={},
-        anthropic_client=client,
+        provider=provider,
     )
     assert "AI detector" not in summary
     assert "[redacted]" in summary
 
 
-def test_run_alignment_semantic_raises_on_none_client():
+def test_run_alignment_semantic_raises_on_none_provider():
     with pytest.raises(LLMUnavailableError):
         run_alignment_semantic(
             audit_summary={},
             readme_text="",
             sampled_code={},
-            anthropic_client=None,
+            provider=None,
         )
 
 
 def test_run_alignment_semantic_raises_on_malformed_json():
-    client = _make_mock_client(["this is not json"])
+    provider = make_mock_provider("this is not json")
     with pytest.raises(LLMResponseError):
         run_alignment_semantic(
             audit_summary={},
             readme_text="",
             sampled_code={},
-            anthropic_client=client,
+            provider=provider,
         )
 
 
@@ -233,18 +266,19 @@ def test_run_questions_returns_list_of_dicts():
             },
         ]
     )
-    client = _make_mock_client([questions_json])
+    provider = make_mock_provider(questions_json)
 
     qs = run_questions(
         audit_summary={},
         sampled_excerpts={"fetch.py": "..."},
         n=3,
-        anthropic_client=client,
+        provider=provider,
     )
 
     assert isinstance(qs, list)
     assert len(qs) == 3
     assert qs[0]["grounding_file"] == "fetch.py"
+    assert provider.generate.call_count == 1
 
 
 def test_run_questions_post_processes_banned_phrases():
@@ -259,36 +293,36 @@ def test_run_questions_post_processes_banned_phrases():
             }
         ]
     )
-    client = _make_mock_client([questions_json])
+    provider = make_mock_provider(questions_json)
 
     qs = run_questions(
         audit_summary={},
         sampled_excerpts={},
         n=1,
-        anthropic_client=client,
+        provider=provider,
     )
     assert "AI detector" not in qs[0]["text"]
     assert "[redacted]" in qs[0]["text"]
 
 
-def test_run_questions_raises_on_none_client():
+def test_run_questions_raises_on_none_provider():
     with pytest.raises(LLMUnavailableError):
         run_questions(
             audit_summary={},
             sampled_excerpts={},
             n=3,
-            anthropic_client=None,
+            provider=None,
         )
 
 
 def test_run_questions_raises_on_malformed_json():
-    client = _make_mock_client(["not json"])
+    provider = make_mock_provider("not json")
     with pytest.raises(LLMResponseError):
         run_questions(
             audit_summary={},
             sampled_excerpts={},
             n=3,
-            anthropic_client=client,
+            provider=provider,
         )
 
 
@@ -298,40 +332,40 @@ def test_run_questions_raises_on_malformed_json():
 
 
 def test_run_chat_turn_returns_text():
-    client = _make_mock_client(["The audit found three significant findings."])
+    provider = make_mock_provider("The audit found three significant findings.")
     reply = run_chat_turn(
         system_prompt=CHAT_SYSTEM_PROMPT,
         conversation_history=[],
         user_message="Summarize the findings.",
-        anthropic_client=client,
+        provider=provider,
     )
     assert reply == "The audit found three significant findings."
 
 
 def test_run_chat_turn_post_processes_banned_phrases():
-    client = _make_mock_client(["This is an AI detector that determines authorship."])
+    provider = make_mock_provider("This is an AI detector that determines authorship.")
     reply = run_chat_turn(
         system_prompt=CHAT_SYSTEM_PROMPT,
         conversation_history=[],
         user_message="What is byline?",
-        anthropic_client=client,
+        provider=provider,
     )
     assert "AI detector" not in reply
     assert "[redacted]" in reply
 
 
-def test_run_chat_turn_raises_on_none_client():
+def test_run_chat_turn_raises_on_none_provider():
     with pytest.raises(LLMUnavailableError):
         run_chat_turn(
             system_prompt=CHAT_SYSTEM_PROMPT,
             conversation_history=[],
             user_message="hi",
-            anthropic_client=None,
+            provider=None,
         )
 
 
 def test_run_chat_turn_passes_history():
-    client = _make_mock_client(["ok"])
+    provider = make_mock_provider("ok")
     history = [
         {"role": "user", "content": "first"},
         {"role": "assistant", "content": "answer"},
@@ -340,12 +374,12 @@ def test_run_chat_turn_passes_history():
         system_prompt=CHAT_SYSTEM_PROMPT,
         conversation_history=history,
         user_message="second",
-        anthropic_client=client,
+        provider=provider,
     )
-    # Inspect the call to verify messages were passed
-    _args, kwargs = client.messages.create.call_args
-    messages = kwargs["messages"]
-    # The history + new user message should be present
-    assert messages[-1]["role"] == "user"
-    assert messages[-1]["content"] == "second"
-    assert any(m.get("content") == "first" for m in messages)
+    # Inspect the call: history is folded into the user content.
+    args, kwargs = provider.generate.call_args
+    # generate(system, user, *, max_tokens=..., temperature=..., model=...)
+    user_content = args[1]
+    assert "first" in user_content
+    assert "answer" in user_content
+    assert "second" in user_content

@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 0.3.0
+
+### Added
+
+- Multi-provider LLM support via `byline/llm_provider.py`. New
+  `BYLINE_LLM_PROVIDER` env var selects between `anthropic` (default,
+  unchanged) and `openai`. The OpenAI provider also covers any
+  OpenAI-compatible self-hosted endpoint (Ollama, vLLM, LM Studio,
+  llama.cpp) via `OPENAI_BASE_URL`.
+- `openai>=1.0` added under the `[llm]` extra alongside `anthropic`.
+  Both SDKs remain lazy-imported.
+
+### Changed
+
+- `byline.llm` now accepts an `LLMProvider` parameter where it
+  previously took a raw `anthropic.Anthropic` client. The
+  `get_anthropic_client()` helper is preserved as a backwards-compat
+  shim that delegates to `get_llm_provider()`.
+- Banned-phrase scrubbing now applies uniformly to every provider's
+  output, not just Claude's.
+
+### Documentation
+
+- New `docs/llm-providers.md` (added in Round 3) documents the three
+  setup paths in one place.
+
 ## [0.2.0] - 2026-05-27
 
 ### Added
