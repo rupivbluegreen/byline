@@ -285,9 +285,7 @@ def test_small_git_repo_similar_surfaces(tmp_path: Path) -> None:
     stabilise — short corpora drive TTR to ~1.0 and dominate the distance.
     """
     _git_init(tmp_path)
-    plain_sentence = (
-        "the project has a simple goal and the code is clear and the readme is plain"
-    )
+    plain_sentence = "the project has a simple goal and the code is clear and the readme is plain"
     body = "\n".join([plain_sentence] * 12)
     (tmp_path / "README.md").write_text(body + "\n", encoding="utf-8")
     (tmp_path / "main.py").write_text(
