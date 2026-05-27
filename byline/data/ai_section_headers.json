@@ -1,0 +1,20 @@
+[
+  {"pattern": "Getting Started", "type": "literal", "weight": 0.4, "note": "extremely common header in generated READMEs"},
+  {"pattern": "Quick Start", "type": "literal", "weight": 0.4, "note": "common header in generated walkthroughs"},
+  {"pattern": "Prerequisites", "type": "literal", "weight": 0.35, "note": "formal header often appearing in generated docs"},
+  {"pattern": "What This Project Does", "type": "literal", "weight": 0.6, "note": "self-explanatory header pattern common in generated READMEs"},
+  {"pattern": "Credentials at a Glance", "type": "literal", "weight": 0.8, "note": "table-summary header strongly associated with generated docs"},
+  {"pattern": "Container Overview", "type": "literal", "weight": 0.55, "note": "structural header common in generated container docs"},
+  {"pattern": "Using the Gateway", "type": "literal", "weight": 0.45, "note": "instructional header common in generated docs"},
+  {"pattern": "Configuration", "type": "literal", "weight": 0.3, "note": "common header, weak signal in isolation"},
+  {"pattern": "Troubleshooting", "type": "literal", "weight": 0.3, "note": "common header, weak signal in isolation"},
+  {"pattern": "Resources", "type": "literal", "weight": 0.3, "note": "common closing header, weak signal in isolation"},
+  {"pattern": "Connect With Me", "type": "literal", "weight": 0.55, "note": "personal-CTA header common in generated personal-project READMEs"},
+  {"pattern": "What is this?", "type": "literal", "weight": 0.55, "note": "question-style header common in generated READMEs"},
+  {"pattern": "Why this exists", "type": "literal", "weight": 0.5, "note": "motivational header common in generated READMEs"},
+  {"pattern": "How it works", "type": "literal", "weight": 0.4, "note": "explanatory header common in generated docs"},
+  {"pattern": "Tech Stack", "type": "literal", "weight": 0.45, "note": "list-header common in generated project READMEs"},
+  {"pattern": "Architecture", "type": "literal", "weight": 0.35, "note": "common technical header, weak signal in isolation"},
+  {"pattern": "Features", "type": "literal", "weight": 0.3, "note": "common marketing header, weak signal in isolation"},
+  {"pattern": "Installation", "type": "literal", "weight": 0.3, "note": "common instructional header, weak signal in isolation"}
+]
