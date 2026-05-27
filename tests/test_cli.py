@@ -39,6 +39,7 @@ def _plain(text: str) -> str:
     stripped = _ANSI_RE.sub("", text)
     return re.sub(r"\s+", " ", stripped)
 
+
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 SYNTHETIC_REPO = FIXTURES_DIR / "synthetic_ai_repo"
 
