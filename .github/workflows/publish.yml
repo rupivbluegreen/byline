@@ -1,8 +1,7 @@
 # Publishes byline to PyPI on every tag push matching v*.
-# Uses PyPI trusted publishing (OIDC) — no API tokens needed on GitHub.
-# One-time setup on PyPI: register https://github.com/rupivbluegreen/byline
-#   as a trusted publisher for the byline project with workflow=publish.yml
-#   and environment=pypi. Docs: https://docs.pypi.org/trusted-publishers/
+# Uses a PyPI API token stored as the PYPI_API_TOKEN repository secret.
+# Rotate at https://pypi.org/manage/account/token/ if compromised, then
+# update the secret via: gh secret set PYPI_API_TOKEN --body '<new-token>'
 
 name: Publish to PyPI
 
@@ -52,7 +51,6 @@ jobs:
       name: pypi
       url: https://pypi.org/p/byline
     permissions:
-      id-token: write
       contents: read
     steps:
       - name: Download distributions artifact
@@ -63,3 +61,6 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          skip-existing: true
