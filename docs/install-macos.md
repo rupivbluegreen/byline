@@ -121,7 +121,83 @@ echo 'export GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' >> ~/.zshrc
 source ~/.zshrc
 ```
 
-**Want OpenAI or a self-hosted model instead?** `byline` also speaks the OpenAI API and any OpenAI-compatible endpoint (Ollama, vLLM, LM Studio, llama.cpp). Set `BYLINE_LLM_PROVIDER=openai` and `OPENAI_API_KEY` (plus optionally `OPENAI_BASE_URL` for self-hosted). See [`docs/llm-providers.md`](llm-providers.md) for full setup snippets.
+**Want OpenAI or a self-hosted model instead?** `byline` also speaks the OpenAI API and any OpenAI-compatible endpoint (Ollama, vLLM, LM Studio, llama.cpp). The next section walks through the macOS setup and a verification command for each backend; the full reference is in [`docs/llm-providers.md`](llm-providers.md).
+
+## 6a. Configure and verify an LLM provider on macOS
+
+Pick one of the three options below. Each one ends with the same one-line smoke test: a 3-question `questions` run against the bundled synthetic fixture. If it prints three grounded questions, the provider is wired correctly.
+
+### Option A: Claude (default)
+
+```bash
+# 1. Set the key (also recommended to add to ~/.zshrc)
+export ANTHROPIC_API_KEY=sk-ant-xxxxxxxxxxxxxxxxxxxxxxxx
+
+# 2. Verify
+byline questions tests/fixtures/synthetic_ai_repo -n 3
+```
+
+If `byline` was installed via `pip install --user`, the `tests/` fixture isn't in the install directory. Either clone the repo (`git clone https://github.com/rupivbluegreen/byline && cd byline`) or substitute any small local directory you have on disk for the fixture path.
+
+### Option B: OpenAI (GPT)
+
+```bash
+# 1. Get a key from https://platform.openai.com/api-keys
+export BYLINE_LLM_PROVIDER=openai
+export OPENAI_API_KEY=sk-proj-xxxxxxxxxxxxxxxxxxxxxxxx
+export BYLINE_LLM_MODEL=gpt-4o          # optional, this is the default
+
+# 2. Verify
+byline questions tests/fixtures/synthetic_ai_repo -n 3
+```
+
+### Option C: Self-hosted via Ollama (runs locally, no cloud API)
+
+```bash
+# 1. Install and start Ollama
+brew install ollama
+ollama serve &                          # leaves Ollama running in the background
+
+# 2. Pull a small model (3-4 GB; one-time download)
+ollama pull llama3.2
+
+# 3. Point byline at Ollama's OpenAI-compatible endpoint
+export BYLINE_LLM_PROVIDER=openai
+export OPENAI_API_KEY=ollama            # any non-empty string; Ollama ignores it
+export OPENAI_BASE_URL=http://localhost:11434/v1
+export BYLINE_LLM_MODEL=llama3.2
+
+# 4. Verify
+byline questions tests/fixtures/synthetic_ai_repo -n 3
+```
+
+Local models tend to be slower (a few seconds to a minute per call on CPU; faster on Apple Silicon). They may also drift more from the JSON-shaped response that `questions` expects, in which case byline logs a warning and drops the malformed entries.
+
+### Switching providers later
+
+The provider is resolved once per command run, from the env at process start. To swap between Claude and Ollama, either edit `~/.zshrc` and `source` it, or set the env vars inline for one command:
+
+```bash
+BYLINE_LLM_PROVIDER=openai OPENAI_BASE_URL=http://localhost:11434/v1 OPENAI_API_KEY=ollama BYLINE_LLM_MODEL=llama3.2 \
+  byline questions tests/fixtures/synthetic_ai_repo -n 3
+```
+
+### What "wired correctly" looks like
+
+A passing smoke test prints something like:
+
+```markdown
+# Interview Questions
+
+## Q1. The Dockerfile bundles a banner comment block at the top — what does that scaffolding suggest about the operational maturity of the deployment, and how would you tighten it for production?
+_Grounding: Dockerfile:1_
+_Rationale: Banner comments are a stylistic signal flagged by the audit; this asks the candidate to defend or refine the convention._
+_Signal: shell_banner_
+
+...
+```
+
+If you instead see `error: This command requires the LLM extras and an API key`, your env vars aren't picked up yet — open a fresh shell or re-`source ~/.zshrc`.
 
 ## 7. Optional: install Java for typo detection
 
