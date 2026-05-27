@@ -166,6 +166,11 @@ def audit(
         "--no-color",
         help="Disable colored output.",
     ),
+    no_history: bool = typer.Option(
+        False,
+        "--no-history",
+        help="Skip commit forensics (faster, for shallow or non-git targets).",
+    ),
 ) -> None:
     """Run the full comparative audit of TARGET against CANDIDATE's baseline.
 
@@ -187,7 +192,13 @@ def audit(
         )
 
     try:
-        result = run_audit(target, candidate, token, with_llm=with_llm)
+        import inspect
+
+        sig = inspect.signature(run_audit)
+        kwargs: dict[str, object] = {"with_llm": with_llm}
+        if "with_history" in sig.parameters:
+            kwargs["with_history"] = not no_history
+        result = run_audit(target, candidate, token, **kwargs)
     except SystemExit:
         raise
     except typer.Exit:
@@ -344,3 +355,314 @@ def scan(
         raise typer.Exit(1) from exc
 
     _emit(result, output, docx, json_output, no_color)
+
+
+# ---------------------------------------------------------------------------
+# questions (LLM required)
+# ---------------------------------------------------------------------------
+
+
+@app.command()
+def questions(
+    target: str = typer.Argument(
+        ...,
+        help="Target repository: GitHub URL or local filesystem path.",
+    ),
+    candidate: str | None = typer.Option(
+        None,
+        "--candidate",
+        help="Candidate's GitHub username (optional, for richer grounding).",
+    ),
+    n: int = typer.Option(
+        10,
+        "-n",
+        help="Number of grounded interview questions to generate.",
+    ),
+    output: Path | None = typer.Option(
+        None,
+        "--output",
+        help="Write the rendered Markdown (or JSON) to this path instead of stdout.",
+    ),
+    json_output: bool = typer.Option(
+        False,
+        "--json",
+        help="Emit a structured JSON QuestionSet instead of Markdown.",
+    ),
+    github_token: str | None = typer.Option(
+        None,
+        "--github-token",
+        help="GitHub PAT for higher rate limits; falls back to $GITHUB_TOKEN.",
+    ),
+    verbose: int = typer.Option(
+        0,
+        "--verbose",
+        "-v",
+        count=True,
+        help="Increase logging verbosity. Repeat (-vv) for DEBUG.",
+    ),
+) -> None:
+    """Generate grounded interview questions from a candidate's submission.
+
+    Builds a comparative audit (deterministic-only) of TARGET, then asks
+    Claude for ``n`` interview questions anchored in specific files and
+    signals. Requires the ``[llm]`` extras and ``ANTHROPIC_API_KEY`` in the
+    environment. Questions probe engineering decisions, never authorship.
+    """
+
+    configure_logging(verbose)
+    token = resolve_github_token(github_token)
+
+    # Build the audit first (deterministic only — questions are about the audit).
+    try:
+        audit_result = run_audit(target, candidate, token, with_llm=False)
+    except SystemExit:
+        raise
+    except typer.Exit:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(1) from exc
+
+    # Resolve client — lazy import keeps the top-level module light.
+    from byline.llm import LLMUnavailableError, get_anthropic_client
+
+    client = get_anthropic_client()
+    if client is None:
+        typer.echo(
+            "error: `byline questions` requires the LLM extras and ANTHROPIC_API_KEY.\n"
+            "  Install with: pip install 'byline[llm]'\n"
+            "  Then set ANTHROPIC_API_KEY in your environment.",
+            err=True,
+        )
+        raise typer.Exit(2)
+
+    try:
+        from byline.questions import generate_questions
+
+        # If ``target`` is a local path, hand it through verbatim. If it's a
+        # URL, the audit_result's clone may already be gone — fall back to cwd
+        # as a pragmatic v0.2 trade-off.
+        repo_path = Path(target) if Path(target).exists() else Path(".")
+        question_set = generate_questions(audit_result, repo_path, client, n=n)
+    except LLMUnavailableError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(2) from exc
+    except SystemExit:
+        raise
+    except typer.Exit:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(1) from exc
+
+    if json_output:
+        text = question_set.model_dump_json(indent=2)
+    else:
+        lines: list[str] = ["# Interview Questions", ""]
+        for i, q in enumerate(question_set.questions, 1):
+            lines.append(f"## Q{i}. {q.text}")
+            if q.grounding_file:
+                anchor = q.grounding_file + (
+                    f":{q.grounding_line}" if q.grounding_line else ""
+                )
+                lines.append(f"_Grounding: {anchor}_  ")
+            lines.append(f"_Rationale: {q.rationale}_  ")
+            if q.signal_addressed:
+                lines.append(f"_Signal: {q.signal_addressed}_  ")
+            lines.append("")
+        text = "\n".join(lines)
+
+    if output:
+        output.write_text(text, encoding="utf-8")
+    else:
+        typer.echo(text)
+
+
+# ---------------------------------------------------------------------------
+# chat (LLM required)
+# ---------------------------------------------------------------------------
+
+
+@app.command()
+def chat(
+    target: str = typer.Argument(
+        ...,
+        help="Target repository: GitHub URL or local filesystem path.",
+    ),
+    candidate: str | None = typer.Option(
+        None,
+        "--candidate",
+        help="Candidate's GitHub username (optional baseline source).",
+    ),
+    github_token: str | None = typer.Option(
+        None,
+        "--github-token",
+        help="GitHub PAT for higher rate limits; falls back to $GITHUB_TOKEN.",
+    ),
+    verbose: int = typer.Option(
+        0,
+        "--verbose",
+        "-v",
+        count=True,
+        help="Increase logging verbosity. Repeat (-vv) for DEBUG.",
+    ),
+) -> None:
+    """Open an interactive REPL over the comparative audit findings.
+
+    Builds a deterministic audit of TARGET, then drops into a chat session
+    where reviewers can ask Claude follow-up questions about the signals.
+    Requires the ``[llm]`` extras and ``ANTHROPIC_API_KEY``.
+    """
+
+    configure_logging(verbose)
+    token = resolve_github_token(github_token)
+
+    try:
+        audit_result = run_audit(target, candidate, token, with_llm=False)
+    except SystemExit:
+        raise
+    except typer.Exit:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(1) from exc
+
+    from byline.llm import LLMUnavailableError, get_anthropic_client
+
+    client = get_anthropic_client()
+    if client is None:
+        typer.echo(
+            "error: `byline chat` requires the LLM extras and ANTHROPIC_API_KEY.\n"
+            "  Install with: pip install 'byline[llm]'\n"
+            "  Then set ANTHROPIC_API_KEY in your environment.",
+            err=True,
+        )
+        raise typer.Exit(2)
+
+    from byline.chat import run_chat_session
+
+    repo_path = Path(target) if Path(target).exists() else Path(".")
+    try:
+        run_chat_session(audit_result, repo_path, client)
+    except LLMUnavailableError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(2) from exc
+
+
+# ---------------------------------------------------------------------------
+# align (LLM optional)
+# ---------------------------------------------------------------------------
+
+
+@app.command()
+def align(
+    target: str = typer.Argument(
+        ...,
+        help="Local filesystem path to the repository to check.",
+    ),
+    with_llm: bool = typer.Option(
+        False,
+        "--with-llm",
+        help="Add semantic alignment via Claude (requires the [llm] extras).",
+    ),
+    output: Path | None = typer.Option(
+        None,
+        "--output",
+        help="Write the rendered Markdown (or JSON) to this path instead of stdout.",
+    ),
+    docx: Path | None = typer.Option(
+        None,
+        "--docx",
+        help="Reserved for future docx export of alignment findings.",
+    ),
+    json_output: bool = typer.Option(
+        False,
+        "--json",
+        help="Emit structured JSON instead of Markdown. Incompatible with --docx.",
+    ),
+    verbose: int = typer.Option(
+        0,
+        "--verbose",
+        "-v",
+        count=True,
+        help="Increase logging verbosity. Repeat (-vv) for DEBUG.",
+    ),
+) -> None:
+    """Run the documentation-implementation alignment check on TARGET.
+
+    Surfaces deterministic gaps between the README's promises and the code's
+    delivery as a comparative signal — never as a verdict on authorship. The
+    optional ``--with-llm`` pass adds semantic alignment checks.
+    """
+
+    configure_logging(verbose)
+    if json_output and docx:
+        typer.echo("error: --json is incompatible with --docx", err=True)
+        raise typer.Exit(3)
+
+    repo_path = Path(target)
+    if not repo_path.exists():
+        typer.echo(f"error: target path does not exist: {target}", err=True)
+        raise typer.Exit(1)
+
+    from byline.alignment import check_alignment
+    from byline.llm import get_anthropic_client
+
+    client = get_anthropic_client() if with_llm else None
+
+    try:
+        findings = check_alignment(
+            repo_path, with_llm=with_llm, anthropic_client=client
+        )
+    except SystemExit:
+        raise
+    except typer.Exit:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(1) from exc
+
+    if json_output:
+        text = findings.model_dump_json(indent=2)
+    else:
+        mode = (
+            "deterministic-only"
+            if findings.deterministic_only
+            else "deterministic + semantic"
+        )
+        lines: list[str] = [
+            "# Documentation-Implementation Alignment",
+            "",
+            f"Mode: {mode}",
+            f"Overall: **{findings.overall_alignment}**",
+            "",
+        ]
+        if findings.llm_summary:
+            lines.extend([findings.llm_summary, ""])
+        if findings.checks:
+            lines.append("## Checks")
+            lines.append("")
+            lines.append("| Kind | Source | Severity | Description |")
+            lines.append("|---|---|---|---|")
+            for c in findings.checks:
+                desc = c.description.replace("|", "\\|")
+                lines.append(
+                    f"| {c.kind} | {c.source} | {c.severity} | {desc} |"
+                )
+        else:
+            lines.append("_No alignment issues found._")
+        text = "\n".join(lines)
+
+    if output:
+        output.write_text(text, encoding="utf-8")
+    else:
+        typer.echo(text)
+
+    if docx:
+        # v0.2: docx export from align is intentionally deferred — the
+        # AlignmentFindings shape doesn't map cleanly onto the AuditResult
+        # report renderer yet. Emit a clear note rather than crashing.
+        typer.echo(
+            "note: --docx for align is not yet implemented; markdown output produced.",
+            err=True,
+        )

@@ -307,3 +307,122 @@ def test_audit_error_path_returns_exit_code_one() -> None:
 
     assert result.exit_code == 1
     assert "boom" in (result.stderr or result.output)
+
+
+# ---------------------------------------------------------------------------
+# v0.2 extensions: questions, chat, align, --no-history
+# ---------------------------------------------------------------------------
+
+ALIGNED_DOCS_REPO = FIXTURES_DIR / "aligned_docs_repo"
+MISALIGNED_DOCS_REPO = FIXTURES_DIR / "misaligned_docs_repo"
+
+
+def test_questions_help_lists_flags() -> None:
+    """`byline questions --help` mentions --candidate, -n, --json."""
+
+    result = runner.invoke(app, ["questions", "--help"])
+
+    assert result.exit_code == 0, result.output
+    assert "--candidate" in result.stdout
+    assert "-n" in result.stdout
+    assert "--json" in result.stdout
+
+
+def test_chat_help_exits_zero() -> None:
+    """`byline chat --help` succeeds."""
+
+    result = runner.invoke(app, ["chat", "--help"])
+
+    assert result.exit_code == 0, result.output
+
+
+def test_align_help_mentions_with_llm() -> None:
+    """`byline align --help` mentions --with-llm."""
+
+    result = runner.invoke(app, ["align", "--help"])
+
+    assert result.exit_code == 0, result.output
+    assert "--with-llm" in result.stdout
+
+
+def test_align_aligned_fixture_emits_markdown_overall() -> None:
+    """`byline align <aligned-fixture>` produces a markdown report mentioning Overall."""
+
+    result = runner.invoke(app, ["align", str(ALIGNED_DOCS_REPO)])
+
+    assert result.exit_code == 0, result.output + (result.stderr or "")
+    assert "Overall" in result.stdout
+    # Aligned fixture should classify as aligned (or at worst minor_gaps).
+    assert "aligned" in result.stdout.lower()
+
+
+def test_align_misaligned_fixture_json_is_valid() -> None:
+    """`byline align <misaligned-fixture> --json` emits parseable JSON."""
+
+    result = runner.invoke(
+        app, ["align", str(MISALIGNED_DOCS_REPO), "--json"]
+    )
+
+    assert result.exit_code == 0, result.output + (result.stderr or "")
+    payload = json.loads(result.stdout)
+    assert "checks" in payload
+    assert "overall_alignment" in payload
+    assert "deterministic_only" in payload
+
+
+def test_align_nonexistent_path_exits_one() -> None:
+    """`byline align /nonexistent/path` exits 1."""
+
+    result = runner.invoke(app, ["align", "/nonexistent/path/does/not/exist"])
+
+    assert result.exit_code == 1
+
+
+def test_align_json_and_docx_incompatible(tmp_path: Path) -> None:
+    """`byline align --json --docx <path>` exits 3."""
+
+    docx_file = tmp_path / "report.docx"
+    result = runner.invoke(
+        app,
+        [
+            "align",
+            str(ALIGNED_DOCS_REPO),
+            "--json",
+            "--docx",
+            str(docx_file),
+        ],
+    )
+
+    assert result.exit_code == 3
+
+
+def test_questions_without_llm_key_exits_two(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """`byline questions` without ANTHROPIC_API_KEY exits 2 with a clear error."""
+
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    # Ensure get_anthropic_client returns None regardless of installed extras.
+    with patch("byline.llm.get_anthropic_client", return_value=None):
+        result = runner.invoke(app, ["questions", str(SYNTHETIC_REPO)])
+
+    assert result.exit_code == 2
+    combined = (result.stdout + (result.stderr or "")).lower()
+    assert "anthropic_api_key" in combined or "llm" in combined
+
+
+def test_chat_without_llm_key_exits_two(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """`byline chat` without ANTHROPIC_API_KEY exits 2."""
+
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    with patch("byline.llm.get_anthropic_client", return_value=None):
+        result = runner.invoke(app, ["chat", str(SYNTHETIC_REPO)])
+
+    assert result.exit_code == 2
+
+
+def test_audit_help_mentions_no_history() -> None:
+    """`byline audit --help` documents the new --no-history flag."""
+
+    result = runner.invoke(app, ["audit", "--help"])
+
+    assert result.exit_code == 0, result.output
+    assert "--no-history" in result.stdout
