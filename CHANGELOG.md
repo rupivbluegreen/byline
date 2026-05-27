@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `gitpython>=3.1` and `prompt_toolkit>=3.0` runtime dependencies.
 - CI `test-base-install` job verifying the tool works without the
   `[llm]` extra installed.
+- Released to PyPI as `byline-audit` (install with `pip install byline-audit`).
 
 ### Changed
 
