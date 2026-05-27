@@ -11,6 +11,8 @@ requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
 authors = [
     { name = "Omni", email = "omni@rupiv.ai" },
+    { name = "rupivbluegreen", email = "6534217+rupivbluegreen@users.noreply.github.com" },
+    { name = "Claude Code", email = "noreply@anthropic.com" },
 ]
 keywords = ["comparative-analysis", "attribution", "github", "hiring", "code-review"]
 classifiers = [
@@ -50,8 +52,8 @@ dev = [
 byline = "byline.cli:app"
 
 [project.urls]
-Homepage = "https://github.com/rupiv/byline"
-Issues = "https://github.com/rupiv/byline/issues"
+Homepage = "https://github.com/rupivbluegreen/byline"
+Issues = "https://github.com/rupivbluegreen/byline/issues"
 
 [tool.setuptools.packages.find]
 include = ["byline*"]

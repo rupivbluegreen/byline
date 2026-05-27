@@ -4,7 +4,7 @@
 
 ![PyPI](https://img.shields.io/pypi/v/byline.svg)
 ![Python](https://img.shields.io/pypi/pyversions/byline.svg)
-![CI](https://github.com/rupivblueground/byline/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/rupivbluegreen/byline/actions/workflows/ci.yml/badge.svg)
 ![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)
 
 ## What this is, what this isn't

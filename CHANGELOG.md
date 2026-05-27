@@ -39,4 +39,4 @@ This release establishes the project's framing rule: `byline` produces
 **signals of divergence from a baseline**, never authorship verdicts. All
 output language and documentation reflects this.
 
-[0.1.0]: https://github.com/rupiv/byline/releases/tag/v0.1.0
+[0.1.0]: https://github.com/rupivbluegreen/byline/releases/tag/v0.1.0
