@@ -278,7 +278,9 @@ The `--with-llm` flag enables a complementary Claude-driven pass. The semantic p
 * behaviours implemented in the code that the README does not document,
 * configuration values documented but not actually consumed.
 
-The model returns a structured list of `AlignmentCheck` entries (each tagged `source="llm"`) that are merged with the deterministic checks. When the semantic pass is unavailable (no `[llm]` extra installed, no `ANTHROPIC_API_KEY`, or the model returns malformed output) the audit degrades silently to deterministic-only and sets `deterministic_only=True` on the result.
+The model returns a structured list of `AlignmentCheck` entries (each tagged `source="llm"`) that are merged with the deterministic checks. When the semantic pass is unavailable (no `[llm]` extra installed, no API key for the configured provider, or the model returns malformed output) the audit degrades silently to deterministic-only and sets `deterministic_only=True` on the result.
+
+The qualitative summary, semantic alignment, interview-question generation, and chat session can all run against Anthropic Claude, OpenAI / GPT, or any OpenAI-compatible self-hosted endpoint. The provider is selected via the `BYLINE_LLM_PROVIDER` env var; see `docs/llm-providers.md` for the full setup. The framing rules in this document are enforced uniformly across providers via a banned-phrase post-processor (`byline.llm.strip_banned_phrases`).
 
 ### Severity rollup
 

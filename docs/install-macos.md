@@ -106,7 +106,7 @@ The token only needs the default public read scope. It does not need the `repo` 
 
 ## 6. Set up Claude (only for LLM features)
 
-The `byline questions` and `byline chat` subcommands, plus the optional semantic pass on `byline audit` and `byline align`, call the Anthropic API. Skip this section if you only need deterministic features.
+The `byline questions` and `byline chat` subcommands, plus the optional semantic pass on `byline audit` and `byline align`, call an LLM API. Claude is the default. Skip this section if you only need deterministic features.
 
 ```bash
 # Get an API key at https://console.anthropic.com/account/keys
@@ -120,6 +120,8 @@ echo 'export ANTHROPIC_API_KEY=sk-ant-xxxxxxxxxxxxxxxxxxxxxxxx' >> ~/.zshrc
 echo 'export GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' >> ~/.zshrc
 source ~/.zshrc
 ```
+
+**Want OpenAI or a self-hosted model instead?** `byline` also speaks the OpenAI API and any OpenAI-compatible endpoint (Ollama, vLLM, LM Studio, llama.cpp). Set `BYLINE_LLM_PROVIDER=openai` and `OPENAI_API_KEY` (plus optionally `OPENAI_BASE_URL` for self-hosted). See [`docs/llm-providers.md`](llm-providers.md) for full setup snippets.
 
 ## 7. Optional: install Java for typo detection
 

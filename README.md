@@ -17,7 +17,7 @@
 
 > macOS users: see [`docs/install-macos.md`](docs/install-macos.md) for a step-by-step setup.
 
-`byline` ships in two modes. The base install is deterministic and has no LLM dependency; the `[llm]` extra adds the Anthropic SDK and unlocks the subcommands that call Claude.
+`byline` ships in two modes. The base install is deterministic and has no LLM dependency; the `[llm]` extra adds the Anthropic and OpenAI SDKs and unlocks the subcommands that call an LLM.
 
 The distribution is published on PyPI as `byline-audit` (the `byline` name on PyPI was already taken by an unrelated abandoned project); the import name and CLI entry point are still `byline`.
 
@@ -29,7 +29,9 @@ pip install byline-audit
 pip install 'byline-audit[llm]'
 ```
 
-The `questions` and `chat` subcommands require both the `[llm]` extra and a working `ANTHROPIC_API_KEY` in the environment. The `align` subcommand runs deterministically by default; the optional semantic pass is enabled via flag and also needs the extra and the API key. Every other command (`scan`, `baseline`, `audit`, and the deterministic `align`) works on the base install.
+The `[llm]` extra installs both the Anthropic and OpenAI SDKs. `byline` defaults to Claude but can be pointed at OpenAI's API or any OpenAI-compatible self-hosted endpoint (Ollama, vLLM, LM Studio, llama.cpp) via the `BYLINE_LLM_PROVIDER` / `OPENAI_BASE_URL` env vars. See [`docs/llm-providers.md`](docs/llm-providers.md) for setup snippets.
+
+The `questions` and `chat` subcommands require both the `[llm]` extra and a working API key for the configured provider. The `align` subcommand runs deterministically by default; the optional semantic pass is enabled via flag and also needs the extra and a provider key. Every other command (`scan`, `baseline`, `audit`, and the deterministic `align`) works on the base install.
 
 ## Quickstart
 
@@ -78,7 +80,7 @@ Run `byline --help` (or `byline <command> --help`) for the full flag list.
 ## What's new in v0.2
 
 - Commit history forensics: timeline burst detection, first-commit paste detection, commit-message style profiling against the README, and author identity drift across the commit log.
-- Documentation-implementation alignment: a deterministic pass cross-checks README-documented CLI flags, env vars, commands, and dependencies against the code; an optional semantic pass under `[llm]` adds Claude-driven gap detection.
+- Documentation-implementation alignment: a deterministic pass cross-checks README-documented CLI flags, env vars, commands, and dependencies against the code; an optional semantic pass under `[llm]` adds LLM-driven gap detection.
 - Within-repo self-baseline: compares the stylistic profile of commit messages, the README, and code comments, and reports the within-repo divergence as `consistent`, `notable`, or `significant`.
 - Voice and AI-use disclosure: first-person voice density in the README is reported as a positive presence signal, and explicit AI-use disclosure is surfaced as a positive trust signal that shifts the overall label toward `aligned`.
 - Boilerplate meta-file density: measures how completely a canonical meta-file slate is populated, with a severity bump for small repos where a full set is more notable.

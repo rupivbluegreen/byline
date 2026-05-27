@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 0.3.0
+## [0.3.0] - 2026-05-27
 
 ### Added
 
@@ -15,21 +15,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   OpenAI-compatible self-hosted endpoint (Ollama, vLLM, LM Studio,
   llama.cpp) via `OPENAI_BASE_URL`.
 - `openai>=1.0` added under the `[llm]` extra alongside `anthropic`.
-  Both SDKs remain lazy-imported.
+  Both SDKs remain lazy-imported; the base install still pulls neither.
+- New `docs/llm-providers.md` documents the three setup paths
+  (Anthropic, OpenAI, self-hosted) in one place, including
+  troubleshooting and the env-var contract.
 
 ### Changed
 
 - `byline.llm` now accepts an `LLMProvider` parameter where it
-  previously took a raw `anthropic.Anthropic` client. The
-  `get_anthropic_client()` helper is preserved as a backwards-compat
-  shim that delegates to `get_llm_provider()`.
-- Banned-phrase scrubbing now applies uniformly to every provider's
-  output, not just Claude's.
-
-### Documentation
-
-- New `docs/llm-providers.md` (added in Round 3) documents the three
-  setup paths in one place.
+  previously took a raw `anthropic.Anthropic` client. The original
+  `anthropic_client` parameter and `get_anthropic_client()` helper are
+  preserved as backwards-compat aliases that delegate to the new
+  `provider` parameter and `get_llm_provider()` factory.
+- Banned-phrase scrubbing (`strip_banned_phrases`) now applies
+  uniformly to every provider's output, not just Claude's. The
+  framing-rule enforcement is provider-agnostic.
+- CLI error hint when no API key is set now mentions both
+  `BYLINE_LLM_PROVIDER` and `OPENAI_BASE_URL` so reviewers can find
+  the self-hosted path from the failure message.
+- CI `test-base-install` job tightened: now asserts that neither
+  `anthropic` nor `openai` is imported transitively at base-install
+  time, and runs the full deterministic test list without the
+  previous `|| true` escape hatch.
 
 ## [0.2.0] - 2026-05-27
 
@@ -107,5 +114,6 @@ This release establishes the project's framing rule: `byline` produces
 **signals of divergence from a baseline**, never authorship verdicts. All
 output language and documentation reflects this.
 
+[0.3.0]: https://github.com/rupivbluegreen/byline/releases/tag/v0.3.0
 [0.2.0]: https://github.com/rupivbluegreen/byline/releases/tag/v0.2.0
 [0.1.0]: https://github.com/rupivbluegreen/byline/releases/tag/v0.1.0
