@@ -10,6 +10,7 @@ All helpers operate against the public REST API at ``https://api.github.com``.
 from __future__ import annotations
 
 import base64
+import binascii
 import logging
 import time
 from typing import Any
@@ -301,7 +302,7 @@ def get_file_content(owner: str, repo: str, path: str, token: str | None) -> str
     if encoding == "base64":
         try:
             decoded_bytes = base64.b64decode(raw_content)
-        except (ValueError, base64.binascii.Error):
+        except (ValueError, binascii.Error):
             return ""
     else:
         decoded_bytes = raw_content.encode("utf-8", errors="replace")
