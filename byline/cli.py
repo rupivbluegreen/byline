@@ -423,15 +423,23 @@ def questions(
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(1) from exc
 
-    # Resolve client — lazy import keeps the top-level module light.
-    from byline.llm import LLMUnavailableError, get_anthropic_client
+    # Resolve provider — lazy import keeps the top-level module light.
+    from byline.llm import LLMUnavailableError
+    from byline.llm_provider import get_llm_provider
 
-    client = get_anthropic_client()
-    if client is None:
+    provider = get_llm_provider()
+    if provider is None:
         typer.echo(
-            "error: `byline questions` requires the LLM extras and ANTHROPIC_API_KEY.\n"
-            "  Install with: pip install 'byline[llm]'\n"
-            "  Then set ANTHROPIC_API_KEY in your environment.",
+            "error: This command requires the LLM extras and an API key for the "
+            "configured provider.\n"
+            "  Default: Anthropic — set ANTHROPIC_API_KEY.\n"
+            "  Or use OpenAI / a self-hosted endpoint:\n"
+            "     export BYLINE_LLM_PROVIDER=openai\n"
+            "     export OPENAI_API_KEY=sk-...                    "
+            "# or any value for self-hosted\n"
+            "     export OPENAI_BASE_URL=http://localhost:11434/v1   "
+            "# for Ollama (optional)\n"
+            "  Install the extras with: pip install 'byline-audit[llm]'",
             err=True,
         )
         raise typer.Exit(2)
@@ -443,7 +451,7 @@ def questions(
         # URL, the audit_result's clone may already be gone — fall back to cwd
         # as a pragmatic v0.2 trade-off.
         repo_path = Path(target) if Path(target).exists() else Path(".")
-        question_set = generate_questions(audit_result, repo_path, client, n=n)
+        question_set = generate_questions(audit_result, repo_path, provider=provider, n=n)
     except LLMUnavailableError as exc:
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(2) from exc
@@ -525,14 +533,22 @@ def chat(
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(1) from exc
 
-    from byline.llm import LLMUnavailableError, get_anthropic_client
+    from byline.llm import LLMUnavailableError
+    from byline.llm_provider import get_llm_provider
 
-    client = get_anthropic_client()
-    if client is None:
+    provider = get_llm_provider()
+    if provider is None:
         typer.echo(
-            "error: `byline chat` requires the LLM extras and ANTHROPIC_API_KEY.\n"
-            "  Install with: pip install 'byline[llm]'\n"
-            "  Then set ANTHROPIC_API_KEY in your environment.",
+            "error: This command requires the LLM extras and an API key for the "
+            "configured provider.\n"
+            "  Default: Anthropic — set ANTHROPIC_API_KEY.\n"
+            "  Or use OpenAI / a self-hosted endpoint:\n"
+            "     export BYLINE_LLM_PROVIDER=openai\n"
+            "     export OPENAI_API_KEY=sk-...                    "
+            "# or any value for self-hosted\n"
+            "     export OPENAI_BASE_URL=http://localhost:11434/v1   "
+            "# for Ollama (optional)\n"
+            "  Install the extras with: pip install 'byline-audit[llm]'",
             err=True,
         )
         raise typer.Exit(2)
@@ -541,7 +557,7 @@ def chat(
 
     repo_path = Path(target) if Path(target).exists() else Path(".")
     try:
-        run_chat_session(audit_result, repo_path, client)
+        run_chat_session(audit_result, repo_path, provider=provider)
     except LLMUnavailableError as exc:
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(2) from exc
@@ -604,12 +620,26 @@ def align(
         raise typer.Exit(1)
 
     from byline.alignment import check_alignment
-    from byline.llm import get_anthropic_client
+    from byline.llm_provider import get_llm_provider
 
-    client = get_anthropic_client() if with_llm else None
+    provider = get_llm_provider() if with_llm else None
+    if with_llm and provider is None:
+        typer.echo(
+            "warning: --with-llm requested but no LLM provider is configured.\n"
+            "  Default: Anthropic — set ANTHROPIC_API_KEY.\n"
+            "  Or use OpenAI / a self-hosted endpoint:\n"
+            "     export BYLINE_LLM_PROVIDER=openai\n"
+            "     export OPENAI_API_KEY=sk-...                    "
+            "# or any value for self-hosted\n"
+            "     export OPENAI_BASE_URL=http://localhost:11434/v1   "
+            "# for Ollama (optional)\n"
+            "  Install the extras with: pip install 'byline-audit[llm]'\n"
+            "  Falling back to deterministic-only alignment.",
+            err=True,
+        )
 
     try:
-        findings = check_alignment(repo_path, with_llm=with_llm, anthropic_client=client)
+        findings = check_alignment(repo_path, with_llm=with_llm, provider=provider)
     except SystemExit:
         raise
     except typer.Exit:

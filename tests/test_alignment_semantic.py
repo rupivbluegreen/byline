@@ -8,6 +8,7 @@ from unittest.mock import MagicMock
 
 from byline.alignment import check_alignment, run_semantic_alignment
 from byline.llm import LLMUnavailableError
+from byline.llm_provider import LLMProvider
 from byline.models import AlignmentCheck, AlignmentFindings
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -15,22 +16,18 @@ MISALIGNED = FIXTURES / "misaligned_docs_repo"
 
 
 # ---------------------------------------------------------------------------
-# Mock client helpers (mirrors test_llm_v02.py)
+# Mock provider helpers (mirrors test_llm_v02.py)
 # ---------------------------------------------------------------------------
 
 
-def _make_mock_client(text_responses: list[str]) -> MagicMock:
-    """Mock anthropic-like client whose messages.create returns each text in turn."""
+def _make_mock_provider(text_responses: list[str]) -> MagicMock:
+    """Mock LLMProvider whose ``generate()`` returns each text in turn."""
 
-    client = MagicMock()
-    responses = []
-    for text in text_responses:
-        resp = MagicMock()
-        resp.content = [MagicMock(text=text)]
-        resp.usage = MagicMock(input_tokens=100, output_tokens=50)
-        responses.append(resp)
-    client.messages.create.side_effect = responses
-    return client
+    p = MagicMock(spec=LLMProvider)
+    p.name = "mock"
+    p.default_model = "mock"
+    p.generate.side_effect = list(text_responses)
+    return p
 
 
 def _semantic_checks_payload() -> str:
@@ -63,9 +60,9 @@ def _semantic_checks_payload() -> str:
 
 def test_run_semantic_alignment_returns_checks_and_summary() -> None:
     summary_text = "The README overstates several features the code does not implement."
-    client = _make_mock_client([_semantic_checks_payload(), summary_text])
+    provider = _make_mock_provider([_semantic_checks_payload(), summary_text])
 
-    checks, summary = run_semantic_alignment(MISALIGNED, client)
+    checks, summary = run_semantic_alignment(MISALIGNED, provider)
 
     assert isinstance(checks, list)
     assert len(checks) >= 1
@@ -74,7 +71,11 @@ def test_run_semantic_alignment_returns_checks_and_summary() -> None:
         assert c.source == "llm"
     assert summary == summary_text
     # One call for the checks JSON, one for the summary prose.
-    assert client.messages.create.call_count == 2
+    assert provider.generate.call_count == 2
+    # First call uses the semantic prompt, second uses the summary prompt;
+    # both must request a non-trivial max_tokens budget.
+    first_call = provider.generate.call_args_list[0]
+    assert first_call.kwargs["max_tokens"] >= 500
 
 
 def test_run_semantic_alignment_skips_malformed_entries() -> None:
@@ -100,9 +101,9 @@ def test_run_semantic_alignment_skips_malformed_entries() -> None:
             "not even a dict",
         ]
     )
-    client = _make_mock_client([payload, "summary"])
+    provider = _make_mock_provider([payload, "summary"])
 
-    checks, summary = run_semantic_alignment(MISALIGNED, client)
+    checks, summary = run_semantic_alignment(MISALIGNED, provider)
 
     assert len(checks) == 1
     assert checks[0].description == "Valid entry"
@@ -115,18 +116,20 @@ def test_run_semantic_alignment_skips_malformed_entries() -> None:
 
 
 def test_run_semantic_alignment_returns_empty_on_llm_unavailable() -> None:
-    client = MagicMock()
-    client.messages.create.side_effect = LLMUnavailableError("simulated")
+    provider = MagicMock(spec=LLMProvider)
+    provider.name = "mock"
+    provider.default_model = "mock"
+    provider.generate.side_effect = LLMUnavailableError("simulated")
 
-    checks, summary = run_semantic_alignment(MISALIGNED, client)
+    checks, summary = run_semantic_alignment(MISALIGNED, provider)
 
     assert checks == []
     assert summary == ""
 
 
-def test_run_semantic_alignment_returns_empty_on_none_client() -> None:
-    # ``run_alignment_semantic`` raises LLMUnavailableError when the client is
-    # None; ``run_semantic_alignment`` should swallow that and return empties.
+def test_run_semantic_alignment_returns_empty_on_none_provider() -> None:
+    # ``run_alignment_semantic`` raises LLMUnavailableError when the provider
+    # is None; ``run_semantic_alignment`` should swallow that and return empties.
     checks, summary = run_semantic_alignment(MISALIGNED, None)
 
     assert checks == []
@@ -136,9 +139,9 @@ def test_run_semantic_alignment_returns_empty_on_none_client() -> None:
 def test_run_semantic_alignment_returns_empty_on_non_json_output() -> None:
     """If the model returns non-JSON, llm raises LLMResponseError; we swallow it."""
 
-    client = _make_mock_client(["not valid json", "summary"])
+    provider = _make_mock_provider(["not valid json", "summary"])
 
-    checks, summary = run_semantic_alignment(MISALIGNED, client)
+    checks, summary = run_semantic_alignment(MISALIGNED, provider)
 
     assert checks == []
     assert summary == ""
@@ -151,9 +154,9 @@ def test_run_semantic_alignment_returns_empty_on_non_json_output() -> None:
 
 def test_check_alignment_with_llm_includes_semantic_checks() -> None:
     summary_text = "Several documented behaviors are not implemented."
-    client = _make_mock_client([_semantic_checks_payload(), summary_text])
+    provider = _make_mock_provider([_semantic_checks_payload(), summary_text])
 
-    findings = check_alignment(MISALIGNED, with_llm=True, anthropic_client=client)
+    findings = check_alignment(MISALIGNED, with_llm=True, provider=provider)
 
     assert isinstance(findings, AlignmentFindings)
     assert findings.deterministic_only is False
@@ -164,8 +167,8 @@ def test_check_alignment_with_llm_includes_semantic_checks() -> None:
     assert "llm" in sources
 
 
-def test_check_alignment_without_client_stays_deterministic_only() -> None:
-    findings = check_alignment(MISALIGNED, with_llm=True, anthropic_client=None)
+def test_check_alignment_without_provider_stays_deterministic_only() -> None:
+    findings = check_alignment(MISALIGNED, with_llm=True, provider=None)
 
     assert isinstance(findings, AlignmentFindings)
     assert findings.deterministic_only is True
@@ -176,10 +179,12 @@ def test_check_alignment_without_client_stays_deterministic_only() -> None:
 def test_check_alignment_with_llm_failure_still_reports_deterministic() -> None:
     """LLM failure should not lose the deterministic findings."""
 
-    client = MagicMock()
-    client.messages.create.side_effect = LLMUnavailableError("simulated")
+    provider = MagicMock(spec=LLMProvider)
+    provider.name = "mock"
+    provider.default_model = "mock"
+    provider.generate.side_effect = LLMUnavailableError("simulated")
 
-    findings = check_alignment(MISALIGNED, with_llm=True, anthropic_client=client)
+    findings = check_alignment(MISALIGNED, with_llm=True, provider=provider)
 
     # We did attempt the LLM, so deterministic_only is False even though it
     # produced nothing useful. The deterministic checks are still present.
@@ -187,3 +192,16 @@ def test_check_alignment_with_llm_failure_still_reports_deterministic() -> None:
     assert findings.llm_summary is None
     assert any(c.source == "deterministic" for c in findings.checks)
     assert not any(c.source == "llm" for c in findings.checks)
+
+
+def test_check_alignment_accepts_deprecated_anthropic_client_alias() -> None:
+    """``anthropic_client=`` keeps working as a deprecated alias for ``provider=``."""
+
+    summary_text = "alias kept working"
+    provider = _make_mock_provider([_semantic_checks_payload(), summary_text])
+
+    findings = check_alignment(MISALIGNED, with_llm=True, anthropic_client=provider)
+
+    assert isinstance(findings, AlignmentFindings)
+    assert findings.deterministic_only is False
+    assert findings.llm_summary == summary_text

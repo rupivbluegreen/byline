@@ -395,26 +395,37 @@ def test_align_json_and_docx_incompatible(tmp_path: Path) -> None:
 
 
 def test_questions_without_llm_key_exits_two(monkeypatch) -> None:  # type: ignore[no-untyped-def]
-    """`byline questions` without ANTHROPIC_API_KEY exits 2 with a clear error."""
+    """`byline questions` without any provider key exits 2 with a multi-provider hint."""
 
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    # Ensure get_anthropic_client returns None regardless of installed extras.
-    with patch("byline.llm.get_anthropic_client", return_value=None):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("BYLINE_LLM_PROVIDER", raising=False)
+    # Ensure get_llm_provider returns None regardless of installed extras.
+    with patch("byline.llm_provider.get_llm_provider", return_value=None):
         result = runner.invoke(app, ["questions", str(SYNTHETIC_REPO)])
 
     assert result.exit_code == 2
     combined = (result.stdout + (result.stderr or "")).lower()
-    assert "anthropic_api_key" in combined or "llm" in combined
+    # The hint should mention all three configurable paths.
+    assert "anthropic_api_key" in combined
+    assert "openai_api_key" in combined
+    assert "byline_llm_provider" in combined
 
 
 def test_chat_without_llm_key_exits_two(monkeypatch) -> None:  # type: ignore[no-untyped-def]
-    """`byline chat` without ANTHROPIC_API_KEY exits 2."""
+    """`byline chat` without any provider key exits 2."""
 
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    with patch("byline.llm.get_anthropic_client", return_value=None):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("BYLINE_LLM_PROVIDER", raising=False)
+    with patch("byline.llm_provider.get_llm_provider", return_value=None):
         result = runner.invoke(app, ["chat", str(SYNTHETIC_REPO)])
 
     assert result.exit_code == 2
+    combined = (result.stdout + (result.stderr or "")).lower()
+    assert "anthropic_api_key" in combined
+    assert "openai_api_key" in combined
+    assert "byline_llm_provider" in combined
 
 
 def test_audit_help_mentions_no_history() -> None:

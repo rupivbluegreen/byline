@@ -622,24 +622,25 @@ def _run_audit_for_local_path(
         logger.warning("self-baseline analysis failed: %s", exc)
         self_baseline = None
 
-    # Alignment: deterministic always; semantic only when --with-llm AND key.
+    # Alignment: deterministic always; semantic only when --with-llm AND a
+    # provider is configured.
     alignment: AlignmentFindings | None = None
     try:
         from byline.alignment import check_alignment
 
-        client = None
+        provider = None
         if with_llm:
             try:
-                from byline.llm import get_anthropic_client
+                from byline.llm_provider import get_llm_provider
 
-                client = get_anthropic_client()
+                provider = get_llm_provider()
             except Exception as exc:  # noqa: BLE001
-                logger.warning("anthropic client unavailable: %s", exc)
-                client = None
+                logger.warning("LLM provider unavailable: %s", exc)
+                provider = None
         alignment = check_alignment(
             target_path,
-            with_llm=with_llm and client is not None,
-            anthropic_client=client,
+            with_llm=with_llm and provider is not None,
+            provider=provider,
         )
     except Exception as exc:  # noqa: BLE001
         logger.warning("alignment analysis failed: %s", exc)

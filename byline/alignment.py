@@ -721,9 +721,9 @@ def _sample_code_files(repo_path: Path, readme_text: str) -> dict[str, str]:
 
 def run_semantic_alignment(
     repo_path: Path,
-    anthropic_client: Any,
+    provider: Any,
 ) -> tuple[list[AlignmentCheck], str]:
-    """Run the semantic alignment pass (spec §5.3) via Claude.
+    """Run the semantic alignment pass (spec §5.3) via the configured LLM provider.
 
     Reads the README, picks a small representative code sample, and delegates
     to :func:`byline.llm.run_alignment_semantic` for the actual model call.
@@ -732,7 +732,7 @@ def run_semantic_alignment(
     top of the deterministic checks and should never fail the audit.
     """
 
-    # Local import keeps the optional ``anthropic`` dependency out of the
+    # Local import keeps the optional LLM dependency out of the
     # alignment module's import graph.
     from byline.llm import (
         LLMResponseError,
@@ -751,7 +751,7 @@ def run_semantic_alignment(
 
     try:
         check_dicts, summary_text = run_alignment_semantic(
-            audit_summary, readme_text, sampled_code, anthropic_client
+            audit_summary, readme_text, sampled_code, provider=provider
         )
     except (LLMUnavailableError, LLMResponseError) as exc:
         logger.warning("Semantic alignment skipped: %s", exc)
@@ -802,25 +802,34 @@ def check_alignment(
     repo_path: Path,
     *,
     with_llm: bool = False,
+    provider: Any = None,
     anthropic_client: Any = None,
 ) -> AlignmentFindings:
     """Top-level alignment entry point.
 
-    Always runs the deterministic checks. When ``with_llm=True`` *and* an
-    ``anthropic_client`` is supplied, also runs the semantic pass. The
+    Always runs the deterministic checks. When ``with_llm=True`` *and* a
+    ``provider`` is supplied, also runs the semantic pass. The
     ``deterministic_only`` field on the returned :class:`AlignmentFindings`
     reflects whether the LLM path actually ran, not just whether it was
     requested.
+
+    ``anthropic_client`` is accepted as a deprecated alias for ``provider``
+    so existing callers continue to work. When both are supplied, ``provider``
+    wins.
     """
 
     repo_path = Path(repo_path)
     det_checks = run_deterministic_alignment(repo_path)
 
+    # Resolve the deprecated alias.
+    if provider is None and anthropic_client is not None:
+        provider = anthropic_client
+
     sem_checks: list[AlignmentCheck] = []
     sem_summary = ""
     ran_llm = False
-    if with_llm and anthropic_client is not None:
-        sem_checks, sem_summary = run_semantic_alignment(repo_path, anthropic_client)
+    if with_llm and provider is not None:
+        sem_checks, sem_summary = run_semantic_alignment(repo_path, provider)
         ran_llm = True
 
     all_checks = det_checks + sem_checks

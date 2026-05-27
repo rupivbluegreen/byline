@@ -11,6 +11,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from byline.llm import LLMUnavailableError
+from byline.llm_provider import LLMProvider
 from byline.models import (
     AlignmentCheck,
     AlignmentFindings,
@@ -29,18 +30,14 @@ from byline.questions import generate_questions
 # ---------------------------------------------------------------------------
 
 
-def _make_mock_client(text_responses: list[str]) -> MagicMock:
-    """Return a mock anthropic-like client whose messages.create returns the
-    successive text_responses on each call."""
-    client = MagicMock()
-    responses = []
-    for text in text_responses:
-        resp = MagicMock()
-        resp.content = [MagicMock(text=text)]
-        resp.usage = MagicMock(input_tokens=100, output_tokens=50)
-        responses.append(resp)
-    client.messages.create.side_effect = responses
-    return client
+def _make_mock_provider(text_responses: list[str]) -> MagicMock:
+    """Return a mock LLMProvider whose ``generate()`` returns the successive
+    text_responses on each call."""
+    p = MagicMock(spec=LLMProvider)
+    p.name = "mock"
+    p.default_model = "mock"
+    p.generate.side_effect = list(text_responses)
+    return p
 
 
 def _make_style_profile() -> StyleProfile:
@@ -99,11 +96,11 @@ def _build_synthetic_repo(tmp_path: Path) -> Path:
 # ---------------------------------------------------------------------------
 
 
-def test_generate_questions_raises_when_client_is_none(tmp_path: Path) -> None:
+def test_generate_questions_raises_when_provider_is_none(tmp_path: Path) -> None:
     repo = _build_synthetic_repo(tmp_path)
     audit = _make_audit(str(repo))
     with pytest.raises(LLMUnavailableError):
-        generate_questions(audit, repo, anthropic_client=None, n=5)
+        generate_questions(audit, repo, provider=None, n=5)
 
 
 def test_generate_questions_returns_question_set(tmp_path: Path) -> None:
@@ -143,9 +140,9 @@ def test_generate_questions_returns_question_set(tmp_path: Path) -> None:
         }
         for i in range(5)
     ]
-    client = _make_mock_client([json.dumps(question_objs)])
+    provider = _make_mock_provider([json.dumps(question_objs)])
 
-    result = generate_questions(audit, repo, anthropic_client=client, n=5)
+    result = generate_questions(audit, repo, provider=provider, n=5)
 
     assert isinstance(result, QuestionSet)
     assert len(result.questions) == 5
@@ -339,14 +336,15 @@ def test_generate_questions_summary_shape(tmp_path: Path) -> None:
             "rationale": "r",
         }
     ]
-    client = _make_mock_client([json.dumps(question_objs)])
+    provider = _make_mock_provider([json.dumps(question_objs)])
 
-    generate_questions(audit, repo, anthropic_client=client, n=1)
+    generate_questions(audit, repo, provider=provider, n=1)
 
     # Inspect what was sent to the model. run_questions composes a string
     # containing JSON-serialised audit_summary, so we can parse it back out.
-    _args, kwargs = client.messages.create.call_args
-    user_content = kwargs["messages"][0]["content"]
+    # provider.generate(system, user, *, max_tokens=..., temperature=...).
+    args, _kwargs = provider.generate.call_args
+    user_content = args[1]
     assert "Audit summary (JSON):" in user_content
     # Extract the JSON block following the marker, up to the next blank line / section
     json_blob_start = user_content.index("Audit summary (JSON):") + len("Audit summary (JSON):")
@@ -425,10 +423,10 @@ def test_generate_questions_tolerates_malformed_entries(
             "rationale": "r",
         },
     ]
-    client = _make_mock_client([json.dumps(question_objs)])
+    provider = _make_mock_provider([json.dumps(question_objs)])
 
     with caplog.at_level(logging.WARNING, logger="byline.questions"):
-        result = generate_questions(audit, repo, anthropic_client=client, n=5)
+        result = generate_questions(audit, repo, provider=provider, n=5)
 
     assert len(result.questions) == 4
     assert any("malformed" in rec.message.lower() for rec in caplog.records)

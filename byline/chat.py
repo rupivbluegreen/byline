@@ -192,16 +192,28 @@ def _print_assistant_reply(reply: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def run_chat_session(audit: AuditResult, repo_path: Path, anthropic_client: Any) -> None:
+def run_chat_session(
+    audit: AuditResult,
+    repo_path: Path,
+    provider: Any = None,
+    *,
+    anthropic_client: Any = None,
+) -> None:
     """Run an interactive REPL session over ``audit``.
 
     Blocks until the user exits (``/quit``, EOF, or two consecutive Ctrl+C).
-    Requires a working ``anthropic_client``; raises ``LLMUnavailableError``
-    immediately when ``anthropic_client is None``.
+    Requires a working LLM ``provider``; raises ``LLMUnavailableError``
+    immediately when ``provider is None``. ``anthropic_client`` is accepted
+    as a deprecated alias for ``provider``.
     """
-    if anthropic_client is None:
+    # Resolve deprecated alias.
+    if provider is None and anthropic_client is not None:
+        provider = anthropic_client
+
+    if provider is None:
         raise LLMUnavailableError(
-            "anthropic_client is None; install byline[llm] and set ANTHROPIC_API_KEY"
+            "provider is None; install byline-audit[llm] and set "
+            "ANTHROPIC_API_KEY (or OPENAI_API_KEY with BYLINE_LLM_PROVIDER=openai)"
         )
 
     # Lazy imports — keep module import cheap and test-friendly.
@@ -216,7 +228,7 @@ def run_chat_session(audit: AuditResult, repo_path: Path, anthropic_client: Any)
 
     # Seed turn: prime the model with the audit summary + full JSON context.
     seed_message = f"{summary}\n\nAudit JSON: {audit.model_dump_json(indent=2)}"
-    _seed_context(conversation_history, seed_message, anthropic_client)
+    _seed_context(conversation_history, seed_message, provider)
 
     session: PromptSession = PromptSession()
     interrupted_once = False
@@ -256,14 +268,14 @@ def run_chat_session(audit: AuditResult, repo_path: Path, anthropic_client: Any)
             _handle_show(repo_path, rest)
             continue
         if cmd == "questions":
-            _handle_questions(audit, repo_path, anthropic_client)
+            _handle_questions(audit, repo_path, provider)
             continue
         if cmd == "save":
             _handle_save(conversation_history, rest)
             continue
         if cmd == "reset":
             conversation_history.clear()
-            _seed_context(conversation_history, seed_message, anthropic_client)
+            _seed_context(conversation_history, seed_message, provider)
             print("(conversation history cleared; audit context re-seeded)")
             continue
         if cmd is not None:
@@ -276,7 +288,7 @@ def run_chat_session(audit: AuditResult, repo_path: Path, anthropic_client: Any)
                 CHAT_SYSTEM_PROMPT,
                 conversation_history,
                 user_input,
-                anthropic_client,
+                provider=provider,
             )
         except LLMResponseError as exc:
             print(f"(LLM error: {exc})")
@@ -296,7 +308,7 @@ def run_chat_session(audit: AuditResult, repo_path: Path, anthropic_client: Any)
 def _seed_context(
     conversation_history: list[dict],
     seed_message: str,
-    anthropic_client: Any,
+    provider: Any,
 ) -> None:
     """Send the initial audit-context turn and record both sides."""
     try:
@@ -304,7 +316,7 @@ def _seed_context(
             CHAT_SYSTEM_PROMPT,
             conversation_history,
             seed_message,
-            anthropic_client,
+            provider=provider,
         )
     except LLMResponseError as exc:
         print(f"(LLM error while seeding audit context: {exc})")
@@ -345,7 +357,7 @@ def _handle_show(repo_path: Path, rest: str) -> None:
         print(f"... ({len(lines) - _SHOW_LINE_CAP} more lines omitted)")
 
 
-def _handle_questions(audit: AuditResult, repo_path: Path, anthropic_client: Any) -> None:
+def _handle_questions(audit: AuditResult, repo_path: Path, provider: Any) -> None:
     """Invoke ``byline.questions.generate_questions`` and print the results."""
     try:
         # Deferred import: questions.py may not exist yet during parallel
@@ -359,7 +371,7 @@ def _handle_questions(audit: AuditResult, repo_path: Path, anthropic_client: Any
         question_set = generate_questions(
             audit=audit,
             repo_path=repo_path,
-            anthropic_client=anthropic_client,
+            provider=provider,
             n=5,
         )
     except LLMUnavailableError as exc:

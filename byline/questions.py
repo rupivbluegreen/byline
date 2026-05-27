@@ -97,26 +97,34 @@ _SOURCE_EXTENSIONS: frozenset[str] = frozenset(
 def generate_questions(
     audit: AuditResult,
     repo_path: Path,
-    anthropic_client: Any,
+    provider: Any = None,
     n: int = 10,
+    *,
+    anthropic_client: Any = None,
 ) -> QuestionSet:
     """Generate ``n`` grounded follow-up interview questions.
 
     Pre-processes the audit findings into a compact summary for the LLM,
     samples up to 3 file excerpts that anchor strong signals, then calls
-    Claude via :func:`byline.llm.run_questions`. Returns a
-    :class:`~byline.models.QuestionSet` whose ``questions`` list contains
-    the entries Claude returned, minus any malformed items (which are
-    logged and skipped).
+    the configured LLM provider via :func:`byline.llm.run_questions`.
+    Returns a :class:`~byline.models.QuestionSet` whose ``questions`` list
+    contains the entries the model returned, minus any malformed items
+    (which are logged and skipped).
 
-    Raises :class:`~byline.llm.LLMUnavailableError` when
-    ``anthropic_client`` is ``None`` (fail-fast, before any work).
+    Raises :class:`~byline.llm.LLMUnavailableError` when ``provider`` is
+    ``None`` (fail-fast, before any work). ``anthropic_client`` is accepted
+    as a deprecated alias for ``provider``.
     """
-    if anthropic_client is None:
+    # Resolve deprecated alias.
+    if provider is None and anthropic_client is not None:
+        provider = anthropic_client
+
+    if provider is None:
         raise LLMUnavailableError(
             "This command requires the LLM extras. Install with:\n"
-            "  pip install 'byline[llm]'\n"
-            "and set ANTHROPIC_API_KEY in your environment."
+            "  pip install 'byline-audit[llm]'\n"
+            "and set ANTHROPIC_API_KEY (or OPENAI_API_KEY with "
+            "BYLINE_LLM_PROVIDER=openai) in your environment."
         )
 
     audit_summary = _build_audit_summary(audit)
@@ -128,7 +136,7 @@ def generate_questions(
         audit_summary=audit_summary,
         sampled_excerpts=sampled_excerpts,
         n=n,
-        anthropic_client=anthropic_client,
+        provider=provider,
     )
 
     questions: list[Question] = []

@@ -169,7 +169,10 @@ def test_run_deterministic_alignment_misaligned_repo() -> None:
 
 
 def test_run_semantic_alignment_stub_returns_empty() -> None:
-    checks, summary = run_semantic_alignment(ALIGNED, anthropic_client=object())
+    # Pass a non-LLMProvider sentinel; run_alignment_semantic will route it
+    # through its legacy raw-client path which then fails fast, and
+    # run_semantic_alignment swallows the failure to return empty results.
+    checks, summary = run_semantic_alignment(ALIGNED, provider=object())
     assert checks == []
     assert summary == ""
 

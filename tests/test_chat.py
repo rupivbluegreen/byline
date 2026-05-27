@@ -213,7 +213,14 @@ def test_render_findings_caps_at_30_lines():
 # ---------------------------------------------------------------------------
 
 
-def test_run_chat_session_requires_anthropic_client(tmp_path: Path):
+def test_run_chat_session_requires_provider(tmp_path: Path):
+    audit = _make_audit()
+    with pytest.raises(LLMUnavailableError):
+        run_chat_session(audit, repo_path=tmp_path, provider=None)
+
+
+def test_run_chat_session_rejects_legacy_anthropic_client_none(tmp_path: Path):
+    """The deprecated ``anthropic_client=None`` keyword still raises."""
     audit = _make_audit()
     with pytest.raises(LLMUnavailableError):
         run_chat_session(audit, repo_path=tmp_path, anthropic_client=None)
