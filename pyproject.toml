@@ -4,15 +4,16 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "byline-audit"
-version = "0.3.0"
+version = "0.3.1"
 description = "Comparative attribution analysis tool for take-home hiring submissions on GitHub."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
 authors = [
-    { name = "Omni", email = "omni@rupiv.ai" },
     { name = "rupivbluegreen", email = "6534217+rupivbluegreen@users.noreply.github.com" },
-    { name = "Claude Code", email = "noreply@anthropic.com" },
+]
+maintainers = [
+    { name = "rupivbluegreen", email = "6534217+rupivbluegreen@users.noreply.github.com" },
 ]
 keywords = ["comparative-analysis", "attribution", "github", "hiring", "code-review"]
 classifiers = [
@@ -56,7 +57,11 @@ byline = "byline.cli:app"
 
 [project.urls]
 Homepage = "https://github.com/rupivbluegreen/byline"
+Repository = "https://github.com/rupivbluegreen/byline"
+Source = "https://github.com/rupivbluegreen/byline"
 Issues = "https://github.com/rupivbluegreen/byline/issues"
+Changelog = "https://github.com/rupivbluegreen/byline/blob/main/CHANGELOG.md"
+Documentation = "https://github.com/rupivbluegreen/byline/tree/main/docs"
 
 [tool.setuptools.packages.find]
 include = ["byline*"]

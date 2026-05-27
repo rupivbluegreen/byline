@@ -2,6 +2,11 @@
 
 `byline` is a comparative attribution toolkit for hiring reviewers. It compares the writing surface of a take-home submission (its READMEs, comments, and shell scripts) against the same candidate's prior public GitHub writing, and reports where the two diverge. Output is framed as a set of stylistic signals for human review, not as a judgement about who wrote the code.
 
+- **Source:** https://github.com/rupivbluegreen/byline
+- **PyPI:** https://pypi.org/project/byline-audit/
+- **Author / maintainer:** [rupivbluegreen](https://github.com/rupivbluegreen)
+- **License:** Apache 2.0
+
 ![PyPI](https://img.shields.io/pypi/v/byline-audit.svg)
 ![Python](https://img.shields.io/pypi/pyversions/byline-audit.svg)
 ![CI](https://github.com/rupivbluegreen/byline/actions/workflows/ci.yml/badge.svg)

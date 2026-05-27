@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-05-27
+
+### Changed
+
+- `pyproject.toml` author list reduced to `rupivbluegreen` (PyPI's
+  `Author` field now reflects the actual project owner instead of the
+  in-spec `Omni` persona). `Claude Code` remains credited in
+  `NOTICE` and `CONTRIBUTORS.md` as the implementation co-author via
+  `Co-Authored-By` trailers on every commit.
+- `[project.urls]` extended with explicit `Repository`, `Source`,
+  `Changelog`, and `Documentation` entries pointing at the GitHub
+  repository, so PyPI's sidebar links directly to the source.
+
+### Documentation
+
+- README header now lists Source, PyPI, Author, and License inline so
+  the project page on PyPI surfaces the GitHub repo prominently.
+- `NOTICE` and `CONTRIBUTORS.md` updated to remove the `Omni`
+  persona and credit `rupivbluegreen` as the project owner.
+
 ## [0.3.0] - 2026-05-27
 
 ### Added
@@ -114,6 +134,7 @@ This release establishes the project's framing rule: `byline` produces
 **signals of divergence from a baseline**, never authorship verdicts. All
 output language and documentation reflects this.
 
+[0.3.1]: https://github.com/rupivbluegreen/byline/releases/tag/v0.3.1
 [0.3.0]: https://github.com/rupivbluegreen/byline/releases/tag/v0.3.0
 [0.2.0]: https://github.com/rupivbluegreen/byline/releases/tag/v0.2.0
 [0.1.0]: https://github.com/rupivbluegreen/byline/releases/tag/v0.1.0
