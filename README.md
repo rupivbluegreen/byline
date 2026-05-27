@@ -15,6 +15,8 @@
 
 ## Install
 
+> macOS users: see [`docs/install-macos.md`](docs/install-macos.md) for a step-by-step setup.
+
 `byline` ships in two modes. The base install is deterministic and has no LLM dependency; the `[llm]` extra adds the Anthropic SDK and unlocks the subcommands that call Claude.
 
 The distribution is published on PyPI as `byline-audit` (the `byline` name on PyPI was already taken by an unrelated abandoned project); the import name and CLI entry point are still `byline`.
