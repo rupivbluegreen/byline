@@ -27,12 +27,17 @@ from byline.fingerprints import scan_repo
 from byline.github_client import get_file_content, get_repo_tree
 from byline.metrics import metrics_for_text
 from byline.models import (
+    AlignmentFindings,
     AuditResult,
     BaselineCorpus,
+    BoilerplateFinding,
     ComparativeDelta,
     DisproportionFinding,
     FingerprintHit,
+    HistoryFindings,
+    SelfBaselineFinding,
     StyleProfile,
+    VoiceFinding,
 )
 
 logger = logging.getLogger(__name__)
@@ -285,14 +290,56 @@ def compute_deltas(baseline: StyleProfile, target: StyleProfile) -> list[Compara
 # ---------------------------------------------------------------------------
 
 
-def overall_signal(
+_SIGNAL_LEVELS: tuple[
+    Literal["aligned", "mixed", "divergent", "highly_divergent"], ...
+] = ("aligned", "mixed", "divergent", "highly_divergent")
+
+
+def _v01_base_level(
     deltas: list[ComparativeDelta],
     fingerprints: list[FingerprintHit],
     disproportions: list[DisproportionFinding],
 ) -> Literal["aligned", "mixed", "divergent", "highly_divergent"]:
-    """Heuristic combination of the three signal streams into one label.
+    """Compute the v0.1 base level from deltas, fingerprints, and disproportions.
 
-    Counts are computed as follows::
+    See :func:`overall_signal` for the decision table — this function is the
+    pure v0.1 implementation, factored out so v0.2 additive adjustments can be
+    layered on top.
+    """
+
+    extreme_deltas = sum(1 for d in deltas if d.severity == "extreme")
+    significant_deltas = sum(1 for d in deltas if d.severity in ("significant", "extreme"))
+    n_fp = len(fingerprints)
+    n_signif_disp = sum(1 for x in disproportions if x.severity == "significant")
+    n_notable_disp = sum(1 for x in disproportions if x.severity in ("notable", "significant"))
+
+    if extreme_deltas >= 1 and n_fp >= 8 and n_signif_disp >= 1:
+        return "highly_divergent"
+    if significant_deltas >= 4 or n_fp >= 8 or extreme_deltas >= 1:
+        return "divergent"
+    if significant_deltas >= 2 or n_fp >= 4 or n_notable_disp >= 1:
+        return "mixed"
+    return "aligned"
+
+
+def overall_signal(
+    deltas: list[ComparativeDelta],
+    fingerprints: list[FingerprintHit],
+    disproportions: list[DisproportionFinding],
+    *,
+    history: HistoryFindings | None = None,
+    alignment: AlignmentFindings | None = None,
+    voice: VoiceFinding | None = None,
+    boilerplate: BoilerplateFinding | None = None,
+    self_baseline: SelfBaselineFinding | None = None,
+) -> Literal["aligned", "mixed", "divergent", "highly_divergent"]:
+    """Heuristic combination of v0.1 streams plus v0.2 findings into one label.
+
+    The four levels (ordered from most aligned to most divergent) are::
+
+        ["aligned", "mixed", "divergent", "highly_divergent"]
+
+    **v0.1 base.** From ``deltas``, ``fingerprints``, and ``disproportions``::
 
         extreme_deltas      = len([d for d in deltas if d.severity == "extreme"])
         significant_deltas  = len([d for d in deltas
@@ -312,21 +359,57 @@ def overall_signal(
     * ``significant_deltas >= 2`` OR ``n_fp >= 4`` OR ``n_notable_disp >= 1``
       -> ``"mixed"``
     * otherwise -> ``"aligned"``
+
+    **v0.2 adjustments.** The base index in ``LEVELS`` is then shifted by an
+    integer adjustment derived from the v0.2 findings:
+
+    * ``history.timeline.bursty``                          -> ``+1``
+    * ``history.timeline.first_commit_appears_pasted``     -> ``+1``
+    * ``history.messages.self_baseline_divergence > 0.5``  -> ``+1``
+    * ``history.identity.drift_detected``                  -> ``+2``
+    * ``alignment.overall_alignment == "significant_gaps"`` -> ``+1``
+    * ``not voice.has_first_person_voice``                 -> ``+1``
+    * ``voice.ai_disclosure_found``                        -> ``-2``
+      (disclosure shifts the comparative signal *toward* aligned)
+    * ``boilerplate.severity == "significant"``            -> ``+1``
+    * ``self_baseline.within_repo_divergence == "significant"`` -> ``+1``
+
+    Any v0.2 argument left at ``None`` contributes nothing; with every v0.2
+    argument ``None`` the function returns the v0.1 base level exactly. The
+    final index is clamped to ``[0, len(LEVELS) - 1]`` so extreme adjustments
+    never run off either end.
     """
 
-    extreme_deltas = sum(1 for d in deltas if d.severity == "extreme")
-    significant_deltas = sum(1 for d in deltas if d.severity in ("significant", "extreme"))
-    n_fp = len(fingerprints)
-    n_signif_disp = sum(1 for x in disproportions if x.severity == "significant")
-    n_notable_disp = sum(1 for x in disproportions if x.severity in ("notable", "significant"))
+    base_level = _v01_base_level(deltas, fingerprints, disproportions)
+    base_idx = _SIGNAL_LEVELS.index(base_level)
 
-    if extreme_deltas >= 1 and n_fp >= 8 and n_signif_disp >= 1:
-        return "highly_divergent"
-    if significant_deltas >= 4 or n_fp >= 8 or extreme_deltas >= 1:
-        return "divergent"
-    if significant_deltas >= 2 or n_fp >= 4 or n_notable_disp >= 1:
-        return "mixed"
-    return "aligned"
+    adj = 0
+    if history is not None:
+        if history.timeline.bursty:
+            adj += 1
+        if history.timeline.first_commit_appears_pasted:
+            adj += 1
+        if history.messages.self_baseline_divergence > 0.5:
+            adj += 1
+        if history.identity.drift_detected:
+            adj += 2
+    if alignment is not None:
+        if alignment.overall_alignment == "significant_gaps":
+            adj += 1
+    if voice is not None:
+        if not voice.has_first_person_voice:
+            adj += 1
+        if voice.ai_disclosure_found:
+            adj -= 2
+    if boilerplate is not None:
+        if boilerplate.severity == "significant":
+            adj += 1
+    if self_baseline is not None:
+        if self_baseline.within_repo_divergence == "significant":
+            adj += 1
+
+    final_idx = max(0, min(len(_SIGNAL_LEVELS) - 1, base_idx + adj))
+    return _SIGNAL_LEVELS[final_idx]
 
 
 # ---------------------------------------------------------------------------
@@ -462,15 +545,21 @@ def _run_audit_for_local_path(
     candidate_username: str | None,
     github_token: str | None,
     with_llm: bool,
+    with_history: bool,
 ) -> AuditResult:
     """Shared audit pipeline once we have a concrete on-disk ``target_path``.
 
     1. Builds the baseline corpus when a candidate username is supplied.
     2. Computes baseline and target profiles, deltas, fingerprints, and
        disproportion findings.
-    3. Combines the three signal streams into an overall comparative label.
-    4. Optionally calls the LLM qualitative pass (Task 12); a missing module
-       is treated as "no commentary available" rather than an error.
+    3. Runs v0.2 forensics: history (gated by ``with_history``), voice,
+       boilerplate, self-baseline, and alignment. Each module is wrapped in a
+       try/except so a single failure leaves the corresponding field ``None``
+       rather than aborting the audit.
+    4. Combines all signal streams into an overall comparative label via
+       :func:`overall_signal`.
+    5. Optionally calls the LLM qualitative pass (v0.1 Task 12); a missing
+       module is treated as "no commentary available" rather than an error.
     """
 
     baseline_corpus: BaselineCorpus | None = None
@@ -491,7 +580,78 @@ def _run_audit_for_local_path(
 
     fingerprints = scan_repo(target_path)
     disproportions = analyze_disproportions(target_path)
-    signal = overall_signal(deltas, fingerprints, disproportions)
+
+    # ---- v0.2 forensics ------------------------------------------------------
+    history: HistoryFindings | None = None
+    if with_history:
+        try:
+            from byline.history import audit_history
+
+            history = audit_history(target_path)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("history forensics failed: %s", exc)
+            history = None
+
+    voice: VoiceFinding | None = None
+    try:
+        from byline.voice import analyze_voice
+
+        voice = analyze_voice(target_path)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("voice analysis failed: %s", exc)
+        voice = None
+
+    boilerplate: BoilerplateFinding | None = None
+    try:
+        from byline.boilerplate import analyze_boilerplate
+
+        boilerplate = analyze_boilerplate(target_path)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("boilerplate analysis failed: %s", exc)
+        boilerplate = None
+
+    self_baseline: SelfBaselineFinding | None = None
+    try:
+        from byline.self_baseline import compute_self_baseline
+
+        self_baseline = compute_self_baseline(target_path)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("self-baseline analysis failed: %s", exc)
+        self_baseline = None
+
+    # Alignment: deterministic always; semantic only when --with-llm AND key.
+    alignment: AlignmentFindings | None = None
+    try:
+        from byline.alignment import check_alignment
+
+        client = None
+        if with_llm:
+            try:
+                from byline.llm import get_anthropic_client
+
+                client = get_anthropic_client()
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("anthropic client unavailable: %s", exc)
+                client = None
+        alignment = check_alignment(
+            target_path,
+            with_llm=with_llm and client is not None,
+            anthropic_client=client,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("alignment analysis failed: %s", exc)
+        alignment = None
+
+    signal = overall_signal(
+        deltas,
+        fingerprints,
+        disproportions,
+        history=history,
+        alignment=alignment,
+        voice=voice,
+        boilerplate=boilerplate,
+        self_baseline=self_baseline,
+    )
 
     llm_qualitative: str | None = None
     if with_llm:
@@ -505,6 +665,11 @@ def _run_audit_for_local_path(
             deltas=deltas,
             llm_qualitative=None,
             overall_signal=signal,
+            history=history,
+            alignment=alignment,
+            voice=voice,
+            boilerplate=boilerplate,
+            self_baseline=self_baseline,
         )
         try:
             from byline.llm import qualitative_pass  # type: ignore[attr-defined]
@@ -526,6 +691,11 @@ def _run_audit_for_local_path(
         deltas=deltas,
         llm_qualitative=llm_qualitative,
         overall_signal=signal,
+        history=history,
+        alignment=alignment,
+        voice=voice,
+        boilerplate=boilerplate,
+        self_baseline=self_baseline,
     )
 
 
@@ -535,6 +705,7 @@ def audit(
     github_token: str | None,
     *,
     with_llm: bool = False,
+    with_history: bool = True,
 ) -> AuditResult:
     """Run the full audit pipeline and return a populated :class:`AuditResult`.
 
@@ -554,8 +725,15 @@ def audit(
     built and the ``deltas`` field is empty.
 
     ``with_llm=True`` opportunistically invokes :func:`byline.llm.qualitative_pass`
-    if it exists (Task 12). A missing or failing LLM pass leaves
-    ``llm_qualitative`` as ``None`` rather than aborting the audit.
+    (v0.1 Task 12) and, when an Anthropic client is available, runs the
+    semantic-alignment pass alongside the deterministic alignment checks. A
+    missing or failing LLM pass leaves ``llm_qualitative`` as ``None`` rather
+    than aborting the audit.
+
+    ``with_history=True`` (the default) runs commit-history forensics via
+    :func:`byline.history.audit_history`. Pass ``with_history=False`` to skip
+    that step (e.g. when the target lacks a ``.git`` directory or when speed
+    matters), leaving ``result.history`` as ``None``.
     """
 
     if _is_local_target(target):
@@ -566,6 +744,7 @@ def audit(
             candidate_username,
             github_token,
             with_llm,
+            with_history,
         )
 
     # Remote (GitHub URL) target — materialise into a tempdir then proceed.
@@ -579,4 +758,5 @@ def audit(
             candidate_username,
             github_token,
             with_llm,
+            with_history,
         )
