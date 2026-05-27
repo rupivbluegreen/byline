@@ -278,24 +278,26 @@ def test_non_git_directory_with_aligned_surfaces_is_consistent(tmp_path: Path) -
 
 
 def test_small_git_repo_similar_surfaces(tmp_path: Path) -> None:
-    """A small git repo whose three surfaces are stylistically similar lands in 'consistent'."""
+    """A small git repo whose three surfaces share vocabulary lands at most at 'notable'.
+
+    All three surfaces (commit messages, README, code comments) draw from the same
+    plain-word corpus and are long enough for the type-token-ratio dimension to
+    stabilise — short corpora drive TTR to ~1.0 and dominate the distance.
+    """
     _git_init(tmp_path)
-    (tmp_path / "README.md").write_text(
-        "hello world this is a simple readme with plain words\n",
-        encoding="utf-8",
+    plain_sentence = (
+        "the project has a simple goal and the code is clear and the readme is plain"
     )
+    body = "\n".join([plain_sentence] * 12)
+    (tmp_path / "README.md").write_text(body + "\n", encoding="utf-8")
     (tmp_path / "main.py").write_text(
-        "# hello world this is a simple comment with plain words\n",
+        "\n".join(f"# {plain_sentence}" for _ in range(12)) + "\n",
         encoding="utf-8",
     )
-    _git_commit(tmp_path, "add hello world readme and code")
-    _git_commit_amend = None  # marker for clarity; not used
-    # Touch the readme again to record a second commit with similar prose.
-    (tmp_path / "README.md").write_text(
-        "hello world this is a simple readme with plain words and more plain words\n",
-        encoding="utf-8",
-    )
-    _git_commit(tmp_path, "expand simple readme with more plain words")
+    _git_commit(tmp_path, plain_sentence)
+    extended = body + "\n" + plain_sentence + " and a little extra\n"
+    (tmp_path / "README.md").write_text(extended, encoding="utf-8")
+    _git_commit(tmp_path, plain_sentence + " with an additional line")
 
     finding = compute_self_baseline(tmp_path)
     assert isinstance(finding, SelfBaselineFinding)

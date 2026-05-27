@@ -50,28 +50,14 @@ automatically with no API tokens.
    - PyPI: https://pypi.org/project/byline-audit/
    - GitHub Releases: https://github.com/rupivbluegreen/byline/releases
 
-## 3. Fallback if trusted publishing isn't configured
-
-If the trusted publisher entry hasn't been added on PyPI yet, the
-`pypi-publish` job will fail. You can either:
-
-- Configure trusted publishing (see section 1) and re-run the workflow,
-  or
-- Fall back to a manual upload:
-  ```bash
-  python -m build
-  python -m twine upload dist/*
-  ```
-  using a project-scoped PyPI API token stored in your local environment.
-
-## 4. CI is independent
+## 3. CI is independent
 
 The existing `ci.yml` workflow (lint, format, test matrix, base-install
 verification) runs on every push and pull request and is independent
 of this release workflow. Failing CI does not block a tag-triggered
 release, so make sure `main` is green before tagging.
 
-## 5. Yanking a release
+## 4. Yanking a release
 
 If a release needs to be pulled (security issue, broken build, accidental
 upload), yank it from
