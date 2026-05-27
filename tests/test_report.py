@@ -353,3 +353,221 @@ def test_render_markdown_handles_long_fingerprint_excerpt_truncation() -> None:
     # Full 500-char string must not appear; truncation marker should.
     assert long_excerpt not in md
     assert "…" in md
+
+
+# ---------------------------------------------------------------------------
+# DOCX rendering — spec §9.2
+# ---------------------------------------------------------------------------
+
+
+from byline.report_docx import HEADER_DISCLAIMER, render_docx  # noqa: E402
+
+
+def _docx_full_body_text(doc) -> str:  # type: ignore[no-untyped-def]
+    """Return all paragraph + table-cell text from a docx Document as one blob."""
+    parts: list[str] = [p.text for p in doc.paragraphs]
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                parts.append(cell.text)
+    return "\n".join(parts)
+
+
+def _docx_header_footer_text(doc) -> str:  # type: ignore[no-untyped-def]
+    parts: list[str] = []
+    for section in doc.sections:
+        for para in section.header.paragraphs:
+            parts.append(para.text)
+        for para in section.footer.paragraphs:
+            parts.append(para.text)
+    return "\n".join(parts)
+
+
+def test_render_docx_writes_non_empty_file(tmp_path) -> None:
+    result = _make_result(baseline=_baseline())
+    out = tmp_path / "report.docx"
+    render_docx(result, out)
+    assert out.exists()
+    assert out.stat().st_size > 1000
+
+
+def test_render_docx_disclaimer_verbatim_in_body(tmp_path) -> None:
+    from docx import Document
+
+    result = _make_result(baseline=_baseline())
+    out = tmp_path / "report.docx"
+    render_docx(result, out)
+
+    doc = Document(str(out))
+    body = _docx_full_body_text(doc)
+    assert DISCLAIMER in body
+
+
+def test_render_docx_no_banned_phrases(tmp_path) -> None:
+    from docx import Document
+
+    result = _make_result(baseline=_baseline())
+    out = tmp_path / "report.docx"
+    render_docx(result, out)
+
+    doc = Document(str(out))
+    full = (
+        _docx_full_body_text(doc) + "\n" + _docx_header_footer_text(doc)
+    ).lower()
+    assert "ai detector" not in full
+    assert "detect ai" not in full
+
+
+def test_render_docx_table_present_when_deltas_exist(tmp_path) -> None:
+    from docx import Document
+
+    result = _make_result(baseline=_baseline())
+    out = tmp_path / "report.docx"
+    render_docx(result, out)
+
+    doc = Document(str(out))
+    assert len(doc.tables) >= 1, "expected at least one deltas table"
+
+    table = doc.tables[0]
+    header_row_text = " | ".join(cell.text for cell in table.rows[0].cells)
+    assert "Metric" in header_row_text
+    assert "Baseline" in header_row_text
+    assert "Target" in header_row_text
+    assert "Severity" in header_row_text
+    # 1 header row + one row per delta from _deltas()
+    assert len(table.rows) == 1 + len(_deltas())
+
+
+def test_render_docx_no_baseline_no_table_but_explanation(tmp_path) -> None:
+    from docx import Document
+
+    result = _make_result(baseline=None, deltas=[])
+    out = tmp_path / "report.docx"
+    render_docx(result, out)
+
+    doc = Document(str(out))
+    body = _docx_full_body_text(doc)
+    assert "No candidate baseline was supplied" in body
+    assert "No deltas" in body
+    # When there are no deltas there should be no deltas table.
+    assert len(doc.tables) == 0
+
+
+def test_render_docx_includes_all_required_section_headers(tmp_path) -> None:
+    from docx import Document
+
+    result = _make_result(baseline=_baseline())
+    out = tmp_path / "report.docx"
+    render_docx(result, out)
+
+    doc = Document(str(out))
+    body = _docx_full_body_text(doc)
+    for heading in (
+        "Overall signal",
+        "Baseline profile",
+        "Target profile",
+        "Comparative deltas",
+        "Fingerprint findings",
+        "Disproportion findings",
+        "Qualitative interpretation",
+        "Methodology",
+    ):
+        assert heading in body, f"missing section heading: {heading!r}"
+
+
+def test_render_docx_header_and_footer_set(tmp_path) -> None:
+    from docx import Document
+
+    result = _make_result(baseline=_baseline())
+    out = tmp_path / "report.docx"
+    render_docx(result, out)
+
+    doc = Document(str(out))
+    hf_text = _docx_header_footer_text(doc)
+    assert HEADER_DISCLAIMER in hf_text
+    assert f"byline v{byline.__version__}" in hf_text
+
+
+def test_render_docx_normal_style_uses_arial(tmp_path) -> None:
+    from docx import Document
+
+    result = _make_result(baseline=_baseline())
+    out = tmp_path / "report.docx"
+    render_docx(result, out)
+
+    doc = Document(str(out))
+    assert doc.styles["Normal"].font.name == "Arial"
+
+
+def test_render_docx_us_letter_page_size(tmp_path) -> None:
+    from docx import Document
+    from docx.shared import Inches
+
+    result = _make_result(baseline=_baseline())
+    out = tmp_path / "report.docx"
+    render_docx(result, out)
+
+    doc = Document(str(out))
+    section = doc.sections[0]
+    assert section.page_width == Inches(8.5)
+    assert section.page_height == Inches(11)
+
+
+def test_render_docx_title_present(tmp_path) -> None:
+    from docx import Document
+
+    result = _make_result(baseline=_baseline())
+    out = tmp_path / "report.docx"
+    render_docx(result, out)
+
+    doc = Document(str(out))
+    body = _docx_full_body_text(doc)
+    assert "byline — Comparative Attribution Report" in body
+    # Subtitle metadata appears too.
+    assert "alice/take-home-submission" in body
+    assert "2026-05-27T12:00:00" in body
+
+
+def test_render_docx_creates_parent_directories(tmp_path) -> None:
+    result = _make_result(baseline=_baseline())
+    nested = tmp_path / "nested" / "deeper" / "report.docx"
+    assert not nested.parent.exists()
+    render_docx(result, nested)
+    assert nested.exists()
+
+
+def test_render_docx_methodology_text_present(tmp_path) -> None:
+    from docx import Document
+
+    result = _make_result(baseline=_baseline())
+    out = tmp_path / "report.docx"
+    render_docx(result, out)
+
+    doc = Document(str(out))
+    body = _docx_full_body_text(doc)
+    assert "docs/methodology.md" in body
+
+
+def test_render_docx_with_llm_qualitative_includes_text(tmp_path) -> None:
+    from docx import Document
+
+    qual = "Prose reads more formal than the baseline; vocabulary mix narrower."
+    result = _make_result(baseline=_baseline(), llm_qualitative=qual)
+    out = tmp_path / "report.docx"
+    render_docx(result, out)
+
+    doc = Document(str(out))
+    body = _docx_full_body_text(doc)
+    assert qual in body
+
+
+def test_render_docx_without_llm_qualitative_says_unavailable(tmp_path) -> None:
+    from docx import Document
+
+    result = _make_result(baseline=_baseline(), llm_qualitative=None)
+    out = tmp_path / "report.docx"
+    render_docx(result, out)
+
+    doc = Document(str(out))
+    body = _docx_full_body_text(doc)
+    assert "No LLM qualitative pass" in body
