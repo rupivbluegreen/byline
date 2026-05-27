@@ -12,9 +12,9 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Iterable
 from importlib import resources
 from pathlib import Path
-from typing import Iterable
 
 from byline.metrics import _is_emoji, em_dash_density
 from byline.models import FingerprintHit
@@ -140,7 +140,7 @@ def _excerpt_around(text: str, start: int, end: int) -> str:
     return line
 
 
-def _iter_headers(text: str) -> Iterable[tuple[int, int, str]]:
+def _iter_headers(text: str) -> Iterable[tuple[int, str, str]]:
     """Yield ``(1-indexed line number, raw line, captured header text)`` for ATX headers."""
 
     for idx, raw in enumerate(text.splitlines(), start=1):

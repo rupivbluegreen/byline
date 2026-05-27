@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 import httpx
-import pytest
 
-from byline import corpus, github_client
+from byline import corpus
 from byline.models import BaselineCorpus, WritingSample
-
 
 # ---------------------------------------------------------------------------
 # Fakes / fixture helpers
@@ -71,7 +69,9 @@ def _fake_get_user_profile_readme(username: str, token: str | None):
     )
 
 
-def _install_fakes(monkeypatch, *, file_content=None, profile_readme=None, repos=None, commits=None):
+def _install_fakes(
+    monkeypatch, *, file_content=None, profile_readme=None, repos=None, commits=None
+):
     monkeypatch.setattr(corpus, "get_user_repos", repos or _fake_get_user_repos)
     monkeypatch.setattr(corpus, "get_file_content", file_content or _fake_get_file_content)
     monkeypatch.setattr(
@@ -131,7 +131,9 @@ def test_build_corpus_happy_path(monkeypatch):
 def test_build_corpus_skips_repo_on_http_error(monkeypatch):
     def file_content(owner: str, repo: str, path: str, token: str | None):
         if repo == "bar":
-            request = httpx.Request("GET", "https://api.github.com/repos/alice/bar/contents/README.md")
+            request = httpx.Request(
+                "GET", "https://api.github.com/repos/alice/bar/contents/README.md"
+            )
             response = httpx.Response(404, request=request)
             raise httpx.HTTPStatusError("not found", request=request, response=response)
         return _fake_get_file_content(owner, repo, path, token)

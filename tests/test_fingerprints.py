@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from byline.fingerprints import (
     _load_headers,
     _load_phrases,
@@ -15,7 +13,6 @@ from byline.fingerprints import (
 )
 from byline.models import FingerprintHit
 from tests.conftest import FIXTURES_DIR
-
 
 # ---------------------------------------------------------------------------
 # Data loaders

@@ -25,7 +25,6 @@ from byline.models import (
 )
 from tests.conftest import FIXTURES_DIR
 
-
 # ---------------------------------------------------------------------------
 # StyleProfile fixture helpers
 # ---------------------------------------------------------------------------

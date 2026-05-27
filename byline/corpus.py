@@ -123,9 +123,7 @@ def build_corpus(
                         word_count=words,
                     )
                 )
-                logger.info(
-                    "added commit-message sample from %s (%d words)", full_name, words
-                )
+                logger.info("added commit-message sample from %s (%d words)", full_name, words)
 
     # Profile README is a separate top-level source — failure here is logged
     # but doesn't abort the build.

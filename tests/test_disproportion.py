@@ -14,7 +14,6 @@ from byline.disproportion import (
 from byline.models import DisproportionFinding
 from tests.conftest import FIXTURES_DIR
 
-
 SYNTHETIC_REPO = FIXTURES_DIR / "synthetic_ai_repo"
 
 
@@ -87,18 +86,7 @@ def test_doc_to_code_ratio_excludes_lockfiles_and_venv(tmp_path: Path) -> None:
 
 def test_comment_density_significant(tmp_path: Path) -> None:
     src = tmp_path / "script.py"
-    src.write_text(
-        "# c1\n"
-        "# c2\n"
-        "# c3\n"
-        "# c4\n"
-        "# c5\n"
-        "x = 1\n"
-        "y = 2\n"
-        "z = 3\n"
-        "a = 4\n"
-        "b = 5\n"
-    )
+    src.write_text("# c1\n# c2\n# c3\n# c4\n# c5\nx = 1\ny = 2\nz = 3\na = 4\nb = 5\n")
     finding = comment_density(tmp_path)
     assert isinstance(finding, DisproportionFinding)
     assert finding.name == "comment_density"
@@ -116,12 +104,7 @@ def test_comment_density_no_code_files(tmp_path: Path) -> None:
 def test_comment_density_block_comment(tmp_path: Path) -> None:
     src = tmp_path / "script.js"
     src.write_text(
-        "/* block start\n"
-        " * inside block\n"
-        " * still inside\n"
-        " */\n"
-        "const x = 1;\n"
-        "const y = 2;\n"
+        "/* block start\n * inside block\n * still inside\n */\nconst x = 1;\nconst y = 2;\n"
     )
     finding = comment_density(tmp_path)
     # 4 lines inside the block are comments, plus 0 line comments; 2 code lines.

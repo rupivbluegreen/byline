@@ -12,7 +12,7 @@ The verbatim disclaimer from spec §9.3 is rendered exactly once in section 2.
 from __future__ import annotations
 
 import math
-from typing import Iterable
+from collections.abc import Iterable
 
 import byline
 from byline.models import (
@@ -23,7 +23,6 @@ from byline.models import (
     FingerprintHit,
     StyleProfile,
 )
-
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -58,8 +57,7 @@ _MAX_EXCERPT_LEN: int = 120
 #: One-line plain-English gloss per overall_signal level.
 _OVERALL_GLOSS: dict[str, str] = {
     "aligned": (
-        "Target writing surface is broadly consistent with the candidate's "
-        "observed baseline."
+        "Target writing surface is broadly consistent with the candidate's observed baseline."
     ),
     "mixed": (
         "Some metrics diverge from baseline while others align; treat as a "
@@ -155,8 +153,7 @@ def _render_baseline_profile(baseline: BaselineCorpus | None) -> str:
 
     repos_count = len(baseline.repos_scanned)
     lines.append(
-        f"Baseline aggregated from {repos_count} repo(s), "
-        f"{baseline.total_words} total words."
+        f"Baseline aggregated from {repos_count} repo(s), {baseline.total_words} total words."
     )
     # Spec wording mentions repos_scanned count and total_words. We've baked
     # both into the summary; baseline-side StyleProfile is only used to source
@@ -174,10 +171,7 @@ def _render_baseline_profile(baseline: BaselineCorpus | None) -> str:
 
 def _render_target_profile(profile: StyleProfile) -> str:
     lines: list[str] = ["## Target profile", ""]
-    lines.append(
-        "Target style profile computed from the repository's Markdown and "
-        "prose comments."
-    )
+    lines.append("Target style profile computed from the repository's Markdown and prose comments.")
     lines.append("")
     for field in _STYLE_PROFILE_FIELDS:
         value = getattr(profile, field)
@@ -196,10 +190,9 @@ def _render_deltas(deltas: list[ComparativeDelta]) -> str:
 
     # Emit in StyleProfile field order regardless of input list order.
     by_metric = {d.metric: d for d in deltas}
-    ordered: Iterable[ComparativeDelta] = (
-        [by_metric[m] for m in _STYLE_PROFILE_FIELDS if m in by_metric]
-        + [d for d in deltas if d.metric not in _STYLE_PROFILE_FIELDS]
-    )
+    ordered: Iterable[ComparativeDelta] = [
+        by_metric[m] for m in _STYLE_PROFILE_FIELDS if m in by_metric
+    ] + [d for d in deltas if d.metric not in _STYLE_PROFILE_FIELDS]
 
     for d in ordered:
         abs_delta = _format_signed(d.absolute_delta)

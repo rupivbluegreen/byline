@@ -4,8 +4,9 @@ This module is the user-facing entry point for ``byline``. All help text,
 log messages, and error strings are framed as *comparative attribution* —
 they talk about *signals*, *baselines*, and *divergence* between a
 candidate's prior writing surface and a target repository. The CLI never
-claims to "detect AI" or to render a verdict on authorship; that framing is
-load-bearing for the product and is enforced by the test suite.
+claims to classify writing as machine-authored or to render a verdict on
+authorship; that framing is load-bearing for the product and is enforced by
+the test suite.
 
 Exit codes (spec §4):
 
@@ -20,7 +21,6 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional
 
 import typer
 from rich.console import Console
@@ -28,6 +28,8 @@ from rich.console import Console
 from byline import __version__
 from byline.compare import (
     audit as run_audit,
+)
+from byline.compare import (
     compute_baseline_profile,
 )
 from byline.config import configure_logging, resolve_github_token
@@ -35,7 +37,6 @@ from byline.corpus import build_corpus
 from byline.models import AuditResult
 from byline.report import render_markdown
 from byline.report_docx import render_docx
-
 
 app = typer.Typer(
     name="byline",
@@ -60,7 +61,7 @@ def _version_callback(value: bool) -> None:
 
 @app.callback()
 def _root(
-    version: Optional[bool] = typer.Option(  # noqa: B008 — Typer pattern
+    version: bool | None = typer.Option(  # noqa: B008 — Typer pattern
         None,
         "--version",
         callback=_version_callback,
@@ -78,8 +79,8 @@ def _root(
 
 def _emit(
     result: AuditResult,
-    output: Optional[Path],
-    docx: Optional[Path],
+    output: Path | None,
+    docx: Path | None,
     json_output: bool,
     no_color: bool,
 ) -> None:
@@ -128,12 +129,12 @@ def audit(
         "--candidate",
         help="Candidate's GitHub username (baseline source).",
     ),
-    output: Optional[Path] = typer.Option(
+    output: Path | None = typer.Option(
         None,
         "--output",
         help="Write the Markdown (or JSON) report to this path instead of stdout.",
     ),
-    docx: Optional[Path] = typer.Option(
+    docx: Path | None = typer.Option(
         None,
         "--docx",
         help="Also render a Word .docx report to this path.",
@@ -143,7 +144,7 @@ def audit(
         "--with-llm",
         help="Run the optional Claude qualitative pass over the assembled signals.",
     ),
-    github_token: Optional[str] = typer.Option(
+    github_token: str | None = typer.Option(
         None,
         "--github-token",
         help="GitHub PAT for higher rate limits; falls back to $GITHUB_TOKEN.",
@@ -193,7 +194,7 @@ def audit(
         raise
     except Exception as exc:  # noqa: BLE001
         typer.echo(f"error: {exc}", err=True)
-        raise typer.Exit(1)
+        raise typer.Exit(1) from exc
 
     _emit(result, output, docx, json_output, no_color)
 
@@ -206,7 +207,7 @@ def audit(
 @app.command()
 def baseline(
     username: str = typer.Argument(..., help="GitHub username to build a baseline for."),
-    github_token: Optional[str] = typer.Option(
+    github_token: str | None = typer.Option(
         None,
         "--github-token",
         help="GitHub PAT for higher rate limits; falls back to $GITHUB_TOKEN.",
@@ -252,7 +253,7 @@ def baseline(
         raise
     except Exception as exc:  # noqa: BLE001
         typer.echo(f"error: {exc}", err=True)
-        raise typer.Exit(1)
+        raise typer.Exit(1) from exc
 
     if json_output:
         payload = {
@@ -286,17 +287,17 @@ def scan(
         ...,
         help="Target repository URL or local filesystem path.",
     ),
-    output: Optional[Path] = typer.Option(
+    output: Path | None = typer.Option(
         None,
         "--output",
         help="Write the Markdown (or JSON) report to this path instead of stdout.",
     ),
-    docx: Optional[Path] = typer.Option(
+    docx: Path | None = typer.Option(
         None,
         "--docx",
         help="Also render a Word .docx report to this path.",
     ),
-    github_token: Optional[str] = typer.Option(
+    github_token: str | None = typer.Option(
         None,
         "--github-token",
         help="GitHub PAT for higher rate limits; falls back to $GITHUB_TOKEN.",
@@ -340,6 +341,6 @@ def scan(
         raise
     except Exception as exc:  # noqa: BLE001
         typer.echo(f"error: {exc}", err=True)
-        raise typer.Exit(1)
+        raise typer.Exit(1) from exc
 
     _emit(result, output, docx, json_output, no_color)

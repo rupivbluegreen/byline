@@ -315,14 +315,10 @@ def overall_signal(
     """
 
     extreme_deltas = sum(1 for d in deltas if d.severity == "extreme")
-    significant_deltas = sum(
-        1 for d in deltas if d.severity in ("significant", "extreme")
-    )
+    significant_deltas = sum(1 for d in deltas if d.severity in ("significant", "extreme"))
     n_fp = len(fingerprints)
     n_signif_disp = sum(1 for x in disproportions if x.severity == "significant")
-    n_notable_disp = sum(
-        1 for x in disproportions if x.severity in ("notable", "significant")
-    )
+    n_notable_disp = sum(1 for x in disproportions if x.severity in ("notable", "significant"))
 
     if extreme_deltas >= 1 and n_fp >= 8 and n_signif_disp >= 1:
         return "highly_divergent"
@@ -383,9 +379,7 @@ def _looks_like_github_url(target: str) -> bool:
     )
 
 
-def _materialise_github_repo(
-    owner: str, repo: str, token: str | None, dest: Path
-) -> None:
+def _materialise_github_repo(owner: str, repo: str, token: str | None, dest: Path) -> None:
     """Download a representative slice of a GitHub repo into ``dest``.
 
     Pulls every prose file (``*.md``), shell file (``*.sh``), ``Dockerfile``,

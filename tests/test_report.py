@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-import pytest
-
 import byline
 from byline.models import (
     AuditResult,
@@ -17,7 +15,6 @@ from byline.models import (
     WritingSample,
 )
 from byline.report import render_markdown
-
 
 # ---------------------------------------------------------------------------
 # Canonical disclaimer text from spec §9.3 — must appear verbatim in output.
@@ -215,9 +212,7 @@ def test_render_markdown_sections_appear_in_spec_order() -> None:
     result = _make_result(baseline=_baseline())
     md = render_markdown(result)
     positions = [md.index(h) for h in REQUIRED_HEADERS]
-    assert positions == sorted(positions), (
-        f"sections out of order: {positions}"
-    )
+    assert positions == sorted(positions), f"sections out of order: {positions}"
 
 
 def test_render_markdown_includes_verbatim_disclaimer() -> None:
@@ -411,9 +406,7 @@ def test_render_docx_no_banned_phrases(tmp_path) -> None:
     render_docx(result, out)
 
     doc = Document(str(out))
-    full = (
-        _docx_full_body_text(doc) + "\n" + _docx_header_footer_text(doc)
-    ).lower()
+    full = (_docx_full_body_text(doc) + "\n" + _docx_header_footer_text(doc)).lower()
     assert "ai detector" not in full
     assert "detect ai" not in full
 

@@ -10,8 +10,9 @@ diverges from typical project proportions and is worth raising for human review.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator, Literal
+from typing import Literal
 
 from byline.models import DisproportionFinding
 
@@ -69,13 +70,9 @@ _CODE_EXTENSIONS: frozenset[str] = frozenset(
     }
 )
 
-_IMAGE_EXTENSIONS: frozenset[str] = frozenset(
-    {".png", ".svg", ".jpg", ".jpeg", ".gif", ".webp"}
-)
+_IMAGE_EXTENSIONS: frozenset[str] = frozenset({".png", ".svg", ".jpg", ".jpeg", ".gif", ".webp"})
 
-_DIAGRAM_IMAGE_EXTENSIONS: frozenset[str] = frozenset(
-    {".png", ".svg", ".jpg", ".jpeg", ".gif"}
-)
+_DIAGRAM_IMAGE_EXTENSIONS: frozenset[str] = frozenset({".png", ".svg", ".jpg", ".jpeg", ".gif"})
 
 _BINARY_EXTENSIONS: frozenset[str] = frozenset({".bin", ".so", ".exe", ".dll", ".dylib"})
 

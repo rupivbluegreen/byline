@@ -48,10 +48,10 @@ _EMOJI_RANGES: tuple[tuple[int, int], ...] = (
     (0x1F900, 0x1F9FF),  # Supplemental Symbols and Pictographs
     (0x1FA00, 0x1FA6F),  # Symbols and Pictographs Extended-A
     (0x1FA70, 0x1FAFF),  # Symbols and Pictographs Extended-B
-    (0x2600, 0x26FF),    # Misc Symbols (☀, ⚙, ...)
-    (0x2700, 0x27BF),    # Dingbats (✨, ✅, ...)
-    (0x2300, 0x23FF),    # Misc Technical (⌚, ⏱, ...)
-    (0x2B00, 0x2BFF),    # Misc Symbols and Arrows
+    (0x2600, 0x26FF),  # Misc Symbols (☀, ⚙, ...)
+    (0x2700, 0x27BF),  # Dingbats (✨, ✅, ...)
+    (0x2300, 0x23FF),  # Misc Technical (⌚, ⏱, ...)
+    (0x2B00, 0x2BFF),  # Misc Symbols and Arrows
 )
 
 
@@ -257,9 +257,7 @@ def _load_common_words() -> set[str]:
     if _COMMON_WORDS is not None:
         return _COMMON_WORDS
     try:
-        raw = resources.files("byline.data").joinpath("common_5000.txt").read_text(
-            encoding="utf-8"
-        )
+        raw = resources.files("byline.data").joinpath("common_5000.txt").read_text(encoding="utf-8")
     except (FileNotFoundError, ModuleNotFoundError, OSError):  # pragma: no cover
         from pathlib import Path
 

@@ -11,8 +11,8 @@ page is printed or shared.
 from __future__ import annotations
 
 import math
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -27,7 +27,6 @@ from byline.models import (
     FingerprintHit,
     StyleProfile,
 )
-
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -68,8 +67,7 @@ _MAX_EXCERPT_LEN: int = 120
 #: One-line plain-English gloss per overall_signal level.
 _OVERALL_GLOSS: dict[str, str] = {
     "aligned": (
-        "Target writing surface is broadly consistent with the candidate's "
-        "observed baseline."
+        "Target writing surface is broadly consistent with the candidate's observed baseline."
     ),
     "mixed": (
         "Some metrics diverge from baseline while others align; treat as a "
@@ -186,9 +184,7 @@ def _add_title_block(document: Document, result: AuditResult) -> None:
     subtitle_para = document.add_paragraph()
     subtitle_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
     subtitle_text = (
-        f"Target repo: {result.target_repo}    "
-        f"Candidate: {candidate}    "
-        f"Generated: {generated}"
+        f"Target repo: {result.target_repo}    Candidate: {candidate}    Generated: {generated}"
     )
     subtitle_run = subtitle_para.add_run(subtitle_text)
     subtitle_run.font.size = Pt(10)
@@ -222,9 +218,7 @@ def _add_overall_signal(document: Document, result: AuditResult) -> None:
         body_run.font.name = "Arial"
 
 
-def _add_baseline_profile(
-    document: Document, baseline: BaselineCorpus | None
-) -> None:
+def _add_baseline_profile(document: Document, baseline: BaselineCorpus | None) -> None:
     document.add_heading("Baseline profile", level=1)
     if baseline is None:
         para = document.add_paragraph(
@@ -237,8 +231,7 @@ def _add_baseline_profile(
 
     repos_count = len(baseline.repos_scanned)
     para = document.add_paragraph(
-        f"Baseline aggregated from {repos_count} repo(s), "
-        f"{baseline.total_words} total words."
+        f"Baseline aggregated from {repos_count} repo(s), {baseline.total_words} total words."
     )
     _apply_arial(para)
 
@@ -246,8 +239,7 @@ def _add_baseline_profile(
 def _add_target_profile(document: Document, profile: StyleProfile) -> None:
     document.add_heading("Target profile", level=1)
     intro = document.add_paragraph(
-        "Target style profile computed from the repository's Markdown and "
-        "prose comments."
+        "Target style profile computed from the repository's Markdown and prose comments."
     )
     _apply_arial(intro)
     for field in _STYLE_PROFILE_FIELDS:
@@ -263,9 +255,7 @@ def _add_target_profile(document: Document, profile: StyleProfile) -> None:
 def _add_deltas(document: Document, deltas: list[ComparativeDelta]) -> None:
     document.add_heading("Comparative deltas", level=1)
     if not deltas:
-        para = document.add_paragraph(
-            "No deltas (no baseline). Skipping comparative analysis."
-        )
+        para = document.add_paragraph("No deltas (no baseline). Skipping comparative analysis.")
         _apply_arial(para)
         return
 
@@ -284,7 +274,7 @@ def _add_deltas(document: Document, deltas: list[ComparativeDelta]) -> None:
         pass
 
     header_cells = table.rows[0].cells
-    for cell, label in zip(header_cells, columns):
+    for cell, label in zip(header_cells, columns, strict=False):
         cell.text = ""
         para = cell.paragraphs[0]
         run = para.add_run(label)
@@ -301,16 +291,14 @@ def _add_deltas(document: Document, deltas: list[ComparativeDelta]) -> None:
             _format_relative(delta.relative_delta),
             delta.severity,
         )
-        for cell, text in zip(cells, values):
+        for cell, text in zip(cells, values, strict=False):
             cell.text = ""
             para = cell.paragraphs[0]
             run = para.add_run(text)
             run.font.name = "Arial"
 
 
-def _add_fingerprints(
-    document: Document, fingerprints: list[FingerprintHit]
-) -> None:
+def _add_fingerprints(document: Document, fingerprints: list[FingerprintHit]) -> None:
     document.add_heading("Fingerprint findings", level=1)
     if not fingerprints:
         para = document.add_paragraph("No fingerprint hits in the target.")
@@ -333,9 +321,7 @@ def _add_fingerprints(
             tail_run.font.name = "Arial"
 
 
-def _add_disproportions(
-    document: Document, findings: list[DisproportionFinding]
-) -> None:
+def _add_disproportions(document: Document, findings: list[DisproportionFinding]) -> None:
     document.add_heading("Disproportion findings", level=1)
     if not findings:
         para = document.add_paragraph("No structural disproportions detected.")
@@ -356,9 +342,7 @@ def _add_disproportions(
 def _add_qualitative(document: Document, text: str | None) -> None:
     document.add_heading("Qualitative interpretation", level=1)
     if text is None:
-        para = document.add_paragraph(
-            "No LLM qualitative pass was requested or available."
-        )
+        para = document.add_paragraph("No LLM qualitative pass was requested or available.")
         _apply_arial(para)
         return
     para = document.add_paragraph(text)
@@ -377,8 +361,7 @@ def _add_methodology(document: Document) -> None:
     _apply_arial(para)
 
     link_para = document.add_paragraph(
-        "See docs/methodology.md for full metric definitions, thresholds, and "
-        "limitations."
+        "See docs/methodology.md for full metric definitions, thresholds, and limitations."
     )
     _apply_arial(link_para)
 

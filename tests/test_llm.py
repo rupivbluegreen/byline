@@ -18,7 +18,6 @@ from byline.models import (
     WritingSample,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixture builders (mirrors test_report.py patterns).
 # ---------------------------------------------------------------------------

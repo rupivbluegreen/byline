@@ -63,17 +63,13 @@ def qualitative_pass(result: AuditResult) -> str | None:
     """
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
-        logger.warning(
-            "ANTHROPIC_API_KEY not set; skipping LLM qualitative pass"
-        )
+        logger.warning("ANTHROPIC_API_KEY not set; skipping LLM qualitative pass")
         return None
 
     try:
         anthropic = import_module("anthropic")
     except ImportError:
-        logger.warning(
-            "anthropic package not installed; install byline[llm] to enable"
-        )
+        logger.warning("anthropic package not installed; install byline[llm] to enable")
         return None
 
     user_message = _build_user_message(result)
@@ -91,14 +87,10 @@ def qualitative_pass(result: AuditResult) -> str | None:
         logger.warning("Anthropic API error during qualitative pass: %s", exc)
         return None
     except Exception as exc:  # network errors, auth errors, etc.
-        logger.warning(
-            "Unexpected error during qualitative pass: %s", exc
-        )
+        logger.warning("Unexpected error during qualitative pass: %s", exc)
         return None
 
-    return "".join(
-        block.text for block in message.content if hasattr(block, "text")
-    )
+    return "".join(block.text for block in message.content if hasattr(block, "text"))
 
 
 # ---------------------------------------------------------------------------
@@ -140,9 +132,7 @@ def _build_user_message(result: AuditResult) -> str:
         )
         lines.append(f"- by category: {{{category_repr}}}")
         top_patterns = pattern_counts.most_common(5)
-        top_repr = ", ".join(
-            f"{pattern}: {count}" for pattern, count in top_patterns
-        )
+        top_repr = ", ".join(f"{pattern}: {count}" for pattern, count in top_patterns)
         lines.append(f"- top 5 patterns by frequency: {{{top_repr}}}")
     else:
         lines.append("- (none)")
@@ -152,8 +142,7 @@ def _build_user_message(result: AuditResult) -> str:
     if result.disproportions:
         for finding in result.disproportions:
             lines.append(
-                f"- {finding.name}: observed={finding.observed:.3f}, "
-                f"severity={finding.severity}"
+                f"- {finding.name}: observed={finding.observed:.3f}, severity={finding.severity}"
             )
     else:
         lines.append("- (none)")

@@ -11,7 +11,7 @@
 
 `byline` measures eight stylistic signals on a candidate's submission (em-dash density, emoji-in-headers ratio, sentence length, lexical diversity, typo rate, vocabulary sophistication, banner-comment density, and progress-UX scaffolding), compares each against the candidate's own GitHub baseline, and surfaces the deltas. It also runs a catalogue of phrasing and structural fingerprints against the prose, plus disproportion checks on doc-to-code ratio, diagram inventory, numbered-diagram patterns, and comment density. The intent is to give a reviewer one extra structured data point when deciding whether a submission warrants a follow-up conversation.
 
-`byline` is not an "AI detector". Nothing in the output asserts authorship, and the framing is comparative attribution analysis rather than detection. The tool is built around the assumption that humans and machines both write prose, and the only signal worth surfacing is whether the submission diverges sharply from the candidate's own observable writing history. Treat every report as one input among many, alongside the interview, code review, and reference checks.
+`byline` does not classify writing as machine-authored or human-authored. Nothing in the output asserts authorship, and the framing is comparative attribution analysis rather than detection. The tool is built around the assumption that humans and machines both write prose, and the only signal worth surfacing is whether the submission diverges sharply from the candidate's own observable writing history. Treat every report as one input among many, alongside the interview, code review, and reference checks.
 
 ## Install
 
