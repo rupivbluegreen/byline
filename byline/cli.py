@@ -344,3 +344,36 @@ def scan(
         raise typer.Exit(1) from exc
 
     _emit(result, output, docx, json_output, no_color)
+
+
+# ---------------------------------------------------------------------------
+# wizard
+# ---------------------------------------------------------------------------
+
+
+@app.command()
+def wizard(
+    no_color: bool = typer.Option(
+        False,
+        "--no-color",
+        help="Disable colored output.",
+    ),
+    verbose: int = typer.Option(
+        0,
+        "--verbose",
+        "-v",
+        count=True,
+        help="Increase logging verbosity. Repeat (-vv) for DEBUG.",
+    ),
+) -> None:
+    """Interactive prompted walkthrough — guided alternative to ``audit`` and ``scan``.
+
+    Asks for the mode (scan vs audit), the submission target, the candidate
+    username, output paths, and the optional LLM pass. Frames results as
+    comparative signals of divergence, never as authorship verdicts.
+    """
+
+    from byline.wizard import run_wizard
+
+    configure_logging(verbose)
+    raise typer.Exit(run_wizard(no_color))

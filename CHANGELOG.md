@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-05-27
+
+### Added
+
+- New `byline wizard` interactive subcommand that prompts the user through
+  the mode (scan vs audit), submission target, candidate username, output
+  paths, and the optional LLM qualitative pass — a friendly alternative to
+  remembering CLI flag combinations.
+- macOS install + usage guide at `docs/install-macos.md`.
+- Tag-triggered PyPI publish workflow at `.github/workflows/publish.yml`
+  using PyPI trusted publishing (OIDC; no API tokens stored).
+
+[0.2.0]: https://github.com/rupivbluegreen/byline/releases/tag/v0.2.0
+
 ## [0.1.0] - 2026-05-27
 
 ### Added

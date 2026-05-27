@@ -38,6 +38,9 @@ byline baseline candidate-username
 
 # Full comparative audit
 byline audit ./candidate-submission --candidate candidate-username
+
+# Or walk through the prompts interactively
+byline wizard
 ```
 
 A `byline scan` run produces a short Markdown summary. The shape (illustrative, abbreviated):
