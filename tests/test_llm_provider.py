@@ -21,7 +21,6 @@ from byline.llm_provider import (
     get_llm_provider,
 )
 
-
 # ---------------------------------------------------------------------------
 # Test helpers
 # ---------------------------------------------------------------------------
@@ -117,9 +116,7 @@ def test_anthropic_provider_uses_custom_model(monkeypatch) -> None:
 
 def test_anthropic_provider_raises_without_package(monkeypatch) -> None:
     """Missing anthropic package -> LLMProviderError on instantiation."""
-    _patch_import_module(
-        monkeypatch, {"anthropic": ImportError("no module named anthropic")}
-    )
+    _patch_import_module(monkeypatch, {"anthropic": ImportError("no module named anthropic")})
     with pytest.raises(LLMProviderError):
         AnthropicProvider()
 

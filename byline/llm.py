@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import re
 from collections import Counter
 from importlib import import_module

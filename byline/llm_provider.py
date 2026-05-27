@@ -47,6 +47,7 @@ class AnthropicProvider(LLMProvider):
 
     def __init__(self, *, api_key: str | None = None) -> None:
         from importlib import import_module
+
         try:
             anthropic = import_module("anthropic")
         except ImportError as exc:
@@ -90,6 +91,7 @@ class OpenAIProvider(LLMProvider):
 
     def __init__(self, *, api_key: str | None = None, base_url: str | None = None) -> None:
         from importlib import import_module
+
         try:
             openai = import_module("openai")
         except ImportError as exc:
