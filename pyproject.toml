@@ -3,7 +3,7 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "byline"
+name = "byline-audit"
 version = "0.2.0"
 description = "Comparative attribution analysis tool for take-home hiring submissions on GitHub."
 readme = "README.md"

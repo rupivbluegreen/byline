@@ -2,8 +2,8 @@
 
 `byline` is a comparative attribution toolkit for hiring reviewers. It compares the writing surface of a take-home submission (its READMEs, comments, and shell scripts) against the same candidate's prior public GitHub writing, and reports where the two diverge. Output is framed as a set of stylistic signals for human review, not as a judgement about who wrote the code.
 
-![PyPI](https://img.shields.io/pypi/v/byline.svg)
-![Python](https://img.shields.io/pypi/pyversions/byline.svg)
+![PyPI](https://img.shields.io/pypi/v/byline-audit.svg)
+![Python](https://img.shields.io/pypi/pyversions/byline-audit.svg)
 ![CI](https://github.com/rupivbluegreen/byline/actions/workflows/ci.yml/badge.svg)
 ![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)
 
@@ -17,12 +17,14 @@
 
 `byline` ships in two modes. The base install is deterministic and has no LLM dependency; the `[llm]` extra adds the Anthropic SDK and unlocks the subcommands that call Claude.
 
+The distribution is published on PyPI as `byline-audit` (the `byline` name on PyPI was already taken by an unrelated abandoned project); the import name and CLI entry point are still `byline`.
+
 ```bash
 # Base install (deterministic features only)
-pip install byline
+pip install byline-audit
 
 # Full install (includes LLM-powered subcommands)
-pip install 'byline[llm]'
+pip install 'byline-audit[llm]'
 ```
 
 The `questions` and `chat` subcommands require both the `[llm]` extra and a working `ANTHROPIC_API_KEY` in the environment. The `align` subcommand runs deterministically by default; the optional semantic pass is enabled via flag and also needs the extra and the API key. Every other command (`scan`, `baseline`, `audit`, and the deterministic `align`) works on the base install.
